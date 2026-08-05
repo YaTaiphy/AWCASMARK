@@ -1,0 +1,1 @@
+python -m nuitka --onefile --windows-disable-console --enable-plugin=pyside6 --follow-import-to=need --output-dir=output main.py
