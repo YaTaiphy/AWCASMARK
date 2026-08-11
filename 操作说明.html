@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWACSMARK 操作说明</title>
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --surface: #1a1a1a;
+    --border: #333;
+    --text: #cccccc;
+    --text-dim: #888;
+    --accent: #00cc77;
+    --accent-dim: #008844;
+    --warn: #e09030;
+    --danger: #e05050;
+    --blue: #4090d0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  h1 {
+    font-size: 2em;
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent-dim);
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+  }
+  h2 {
+    font-size: 1.4em;
+    color: #e0e0e0;
+    margin-top: 40px;
+    margin-bottom: 16px;
+    padding-left: 10px;
+    border-left: 4px solid var(--accent);
+  }
+  h3 {
+    font-size: 1.1em;
+    color: #d0d0d0;
+    margin-top: 24px;
+    margin-bottom: 10px;
+  }
+  p { margin-bottom: 12px; }
+  ul, ol { margin: 8px 0 16px 24px; }
+  li { margin-bottom: 6px; }
+  code {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 0.9em;
+    color: #e0c060;
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 18px;
+    overflow-x: auto;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 0.85em;
+    margin-bottom: 16px;
+    line-height: 1.6;
+    color: #c0c0c0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--surface);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  td { font-size: 0.92em; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .note {
+    background: rgba(0, 170, 100, 0.08);
+    border: 1px solid var(--accent-dim);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    color: var(--accent);
+  }
+  .warn {
+    background: rgba(224, 144, 48, 0.08);
+    border: 1px solid var(--warn);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    color: var(--warn);
+  }
+  .danger {
+    background: rgba(224, 80, 80, 0.08);
+    border: 1px solid var(--danger);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    color: var(--danger);
+  }
+  .toc { margin-bottom: 36px; }
+  .toc a { color: var(--blue); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc li { margin-bottom: 4px; }
+  .key { display: inline-block; background: var(--surface); border: 1px solid #555; border-radius: 3px; padding: 2px 8px; font-size: 0.85em; margin: 0 2px; }
+  img { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; margin: 12px 0; }
+  .step { counter-increment: step-counter; }
+  .step::before {
+    content: counter(step-counter);
+    display: inline-block;
+    width: 24px; height: 24px;
+    background: var(--accent-dim);
+    color: #fff;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 24px;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-right: 8px;
+  }
+</style>
+</head>
+<body>
+
+<h1>AWACSMARK 操作说明</h1>
+
+<p>AWACSMARK 是一个 DCS World 预警机辅助工具，通过 OCR 识别预警机通报文字，将敌机位置、高度、航向实时显示在雷达覆盖窗上。</p>
+
+<div class="toc">
+  <h3>目录</h3>
+  <ol>
+    <li><a href="#quickstart">快速开始</a></li>
+    <li><a href="#settings">参数设置</a></li>
+    <li><a href="#main-window">主窗口说明</a></li>
+    <li><a href="#display-modes">雷达显示模式</a></li>
+    <li><a href="#compact-mode">简要模式（无边框全屏雷达）</a></li>
+    <li><a href="#server-modes">服务器模式选择</a></li>
+    <li><a href="#reading-radar">读取雷达图</a></li>
+    <li><a href="#troubleshooting">常见问题</a></li>
+    <li><a href="#logs">日志说明</a></li>
+  </ol>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="quickstart">1. 快速开始</h2>
+
+<h3>1.1 前置条件</h3>
+<ol>
+  <li>DCS World 中已配置 Lua 导出脚本，向 <code>127.0.0.1:12345</code> 发送 UDP 飞行数据</li>
+  <li>远程 OCR 服务器已启动（默认 <code>x.x.x.x:10386</code>）</li>
+  <li>Python 3.13+ 环境，已安装依赖</li>
+</ol>
+
+<h3>1.2 启动</h3>
+<pre>python main.py</pre>
+
+<h3>1.3 操作步骤</h3>
+<ol>
+  <li class="step">点击 <span class="key">信息查看</span> → 填写参数 → <span class="key">确认</span></li>
+  <li class="step">点击 <span class="key">开始</span>（按钮变为「停止」）</li>
+  <li class="step">雷达窗口上即开始显示敌机/友机标记</li>
+  <li class="step">运行中可随时调整显示模式、比例尺、透明度</li>
+  <li class="step">点击 <span class="key">停止</span> 结束任务</li>
+</ol>
+
+<div class="note"><strong>提示：</strong>如果服务器不可达，软件不会卡死——TCP 预检会在 1 秒内快速失败，且 OCR 处理在独立线程中运行，不影响 UI 响应。</div>
+
+<!-- ================================================================== -->
+<h2 id="settings">2. 参数设置</h2>
+<p>点击工具栏 <span class="key">信息查看</span> 打开设置对话框，共 4 个标签页：</p>
+
+<h3>基本</h3>
+<table>
+  <tr><th>参数</th><th>说明</th><th>示例</th></tr>
+  <tr><td>呼号 (Callsign)</td><td>预警机叫你的呼号，含字母和数字（英文模式用空格分隔）</td><td><code>Springfield1</code> 或 <code>Dodge 1</code></td></tr>
+  <tr><td>靶眼 X / Z</td><td>任务编辑器中 Bullseye 的坐标</td><td>X: <code>-250000</code>, Z: <code>150000</code></td></tr>
+  <tr><td>预警机通报单位</td><td>预警机给你报距离和高度的单位</td><td><code>km</code> 或 <code>nm</code></td></tr>
+  <tr><td>敌机残留时间</td><td>标记在屏幕上保留的秒数（过期自动清除）</td><td><code>90</code></td></tr>
+</table>
+
+<h3>截图</h3>
+<table>
+  <tr><th>参数</th><th>说明</th></tr>
+  <tr><td>拖拽选取</td><td>点击绿色按钮 → 对话框隐藏 → 鼠标框选预警机文字区域 → 松开自动回填坐标</td></tr>
+  <tr><td>坐标微调</td><td>手动修改 X, Y (左上角), 宽度, 高度（均为物理像素）</td></tr>
+</table>
+<div class="note"><strong>截图提示：</strong>确保框选区域刚好包围预警机通报文字行（左侧 BRA 通报或右侧面板），不要包含过多空白区域。</div>
+
+<h3>功能</h3>
+<table>
+  <tr><th>参数</th><th>说明</th></tr>
+  <tr><td>显示敌机</td><td>勾选后启动 OCR 定时截图和敌机标记</td></tr>
+  <tr><td>显示队友</td><td>勾选后定时同步队友位置</td></tr>
+  <tr><td>小队代码</td><td>用于队伍匹配的数字代码，相同代码的玩家共享位置</td></tr>
+  <tr><td>服务器模式</td><td>选择预警机通报语言和格式，见 <a href="#server-modes">第 6 节</a></td></tr>
+</table>
+
+<h3>服务器</h3>
+<table>
+  <tr><th>参数</th><th>说明</th></tr>
+  <tr><td>使用默认服务器</td><td>勾选后使用内置服务器地址，无需手动填写</td></tr>
+  <tr><td>地址 / 端口</td><td>OCR 和队友同步服务器的 HTTP 地址</td></tr>
+  <tr><td>服务器连通测试</td><td>点击后可检测服务器是否可达</td></tr>
+</table>
+
+<!-- ================================================================== -->
+<h2 id="main-window">3. 主窗口说明</h2>
+
+<h3>3.1 工具栏</h3>
+<table>
+  <tr><th>按钮</th><th>功能</th></tr>
+  <tr><td><span class="key">简要</span></td><td>切换简要显示模式（无边框全屏雷达）</td></tr>
+  <tr><td><span class="key">开始 / 停止</span></td><td>启动/停止任务（监听 UDP + OCR 识别 + 队友同步）</td></tr>
+  <tr><td><span class="key">信息查看</span></td><td>打开参数设置对话框</td></tr>
+  <tr><td>模式下拉框</td><td>切换雷达显示模式：中心 / 直对 / 中心直对</td></tr>
+  <tr><td>单位下拉框</td><td>切换显示单位：km / nm</td></tr>
+</table>
+
+<h3>3.2 浮动控件</h3>
+<table>
+  <tr><th>位置</th><th>控件</th><th>功能</th></tr>
+  <tr><td>左侧</td><td>垂直滑块</td><td>窗口透明度 20%–100%</td></tr>
+  <tr><td>右侧</td><td>垂直滑块 + 标签</td><td>比例尺：50km / 100km / 200km（或 25nm / 50nm / 100nm）</td></tr>
+  <tr><td>左上角</td><td>「置顶」复选框</td><td>窗口始终保持在最前</td></tr>
+</table>
+
+<!-- ================================================================== -->
+<h2 id="display-modes">4. 雷达显示模式</h2>
+
+<table>
+  <tr><th>模式</th><th>本机位置</th><th>视图旋转</th><th>适用场景</th></tr>
+  <tr>
+    <td><strong>中心</strong> (NGAS)</td>
+    <td>窗口中心</td>
+    <td>不旋转（正上=北）</td>
+    <td>态势感知、配合 F10 地图使用</td>
+  </tr>
+  <tr>
+    <td><strong>直对</strong> (SA)</td>
+    <td>窗口底部中央</td>
+    <td>随航向旋转（正上=机头）</td>
+    <td>空战格斗、快速判断敌我方位</td>
+  </tr>
+  <tr>
+    <td><strong>中心直对</strong></td>
+    <td>窗口中心</td>
+    <td>随航向旋转（正上=机头）</td>
+    <td>兼顾态势和指向</td>
+  </tr>
+</table>
+
+<!-- ================================================================== -->
+<h2 id="compact-mode">5. 简要模式</h2>
+
+<p>点击工具栏 <span class="key">简要</span> 进入无边框全屏雷达模式：</p>
+
+<ul>
+  <li><strong>拖动窗口：</strong>鼠标左键按住雷达空白区域拖动</li>
+  <li><strong>调整大小：</strong>鼠标移至窗口边缘，出现双向箭头后拖拽</li>
+  <li><strong>比例尺：</strong>底部水平滑块</li>
+  <li><strong>退出：</strong>点击右上角 <span class="key">恢复</span> 按钮</li>
+</ul>
+
+<div class="note"><strong>推荐用法：</strong>将简要模式窗口放置在游戏画面的角落（类似 Discord 覆盖层），配合 40%–60% 透明度使用，不影响飞行视野。</div>
+
+<!-- ================================================================== -->
+<h2 id="server-modes">6. 服务器模式</h2>
+
+<table>
+  <tr><th>模式</th><th>通报来源</th><th>语言</th><th>文本示例</th></tr>
+  <tr>
+    <td><strong>传统预警机</strong> (0)</td>
+    <td>屏幕左上角 BRA 通报</td>
+    <td>中文</td>
+    <td><code>预警机: Springfield1, 方位 314, 距离 110, 高度 3500, hot</code></td>
+  </tr>
+  <tr>
+    <td><strong>传统预警机(英文)</strong> (1)</td>
+    <td>屏幕左上角 BRA 通报</td>
+    <td>英文</td>
+    <td><code>Overlord1-1: Dodge 4, 314 for 110, at altitude 3500, hot</code></td>
+  </tr>
+  <tr>
+    <td><strong>SPS 服务器</strong> (2)</td>
+    <td>屏幕右侧数据面板</td>
+    <td>英文</td>
+    <td>表格格式：呼号、方位、距离、高度、速度、航向</td>
+  </tr>
+  <tr>
+    <td><strong>BSC 服务器</strong> (3)</td>
+    <td>屏幕右侧数据面板</td>
+    <td>英文</td>
+    <td>简化表格格式</td>
+  </tr>
+</table>
+
+<div class="warn"><strong>注意：</strong>服务器模式必须与游戏内使用的预警机类型匹配。英文服务器用中文模式会无法解析文本，导致雷达无显示。</div>
+
+<!-- ================================================================== -->
+<h2 id="reading-radar">7. 读取雷达图</h2>
+
+<h3>7.1 敌机标记</h3>
+<table>
+  <tr><th>元素</th><th>含义</th></tr>
+  <tr><td><strong>圆点</strong></td><td>敌机位置（方位和距离来自预警机通报）</td></tr>
+  <tr><td><strong>数字</strong></td><td>敌机高度（千英尺或千米，取决于显示单位设置）</td></tr>
+  <tr><td><strong>箭头杆</strong></td><td>敌机航向方向</td></tr>
+  <tr><td><strong>箭头方向</strong></td>
+    <td>
+      <strong>HOT（迎头）：</strong>箭头指向本机中心（敌机正朝你飞来）<br>
+      <strong>COLD（追击）：</strong>箭头背离本机（敌机正远离你）<br>
+      <strong>FLANK（侧对）：</strong>箭头与方位线垂直
+    </td>
+  </tr>
+  <tr><td><strong>颜色淡出</strong></td><td>新 contact 为亮青色，随时间逐步变为暗蓝并淡出</td></tr>
+</table>
+
+<h3>7.2 友机标记</h3>
+<p>蓝色圆点 + 高度数字 + 呼号，箭头方向为友机航向。</p>
+
+<h3>7.3 本机标记</h3>
+<p>中心（或底部中央）的金色箭头为本机，箭头方向 = 机头朝向。</p>
+
+<!-- ================================================================== -->
+<h2 id="troubleshooting">8. 常见问题</h2>
+
+<h3>Q: 雷达图上没有任何敌机显示</h3>
+<ol>
+  <li>确认已点击 <span class="key">开始</span>（按钮变为「停止」）</li>
+  <li>确认 DCS 正在运行并且 Lua 导出正常（UDP 数据流）</li>
+  <li>确认服务器模式与游戏内预警机语言一致（中文 → 模式 0，英文 → 模式 1）</li>
+  <li>确认截图区域正确覆盖了预警机通报文字</li>
+  <li>检查 <code>logs/app.log</code> 查看是否有「OCR 识别到 0 行文本」</li>
+</ol>
+
+<h3>Q: 敌机位置/方位不对</h3>
+<ol>
+  <li>确认靶眼坐标输入正确（与任务编辑器一致）</li>
+  <li>确认预警机通报单位选择正确（km 或 nm）</li>
+</ol>
+
+<h3>Q: 箭头方向不对，没有指向我</h3>
+<ul>
+  <li>HOT（迎头）：箭头应指向本机中心位置</li>
+  <li>COLD（追击）：箭头背离本机</li>
+  <li>如果方向完全反了，可能是呼号匹配错误——检查设置中的呼号是否与预警机通报中的完全一致</li>
+</ul>
+
+<h3>Q: 窗口拖动/调整大小时卡顿</h3>
+<p>最新版本已修复此问题。如果仍有卡顿，尝试降低窗口大小。</p>
+
+<h3>Q: 服务器无法连接</h3>
+<ol>
+  <li>检查服务器地址和端口是否正确</li>
+  <li>使用设置 → 服务器标签页中的「服务器连通测试」</li>
+  <li>如果服务器确实不可达，软件不会卡死——网络操作有 1 秒快速失败和独立线程保护</li>
+</ol>
+
+<h3>Q: OCR 识别不准确</h3>
+<ol>
+  <li>调整截图区域，确保正好包围文字，不要包含地图背景</li>
+  <li>避免截图区域包含其他 UI 元素（如无线电菜单）</li>
+  <li>英文模式下注意文字大小写和空格</li>
+</ol>
+
+<!-- ================================================================== -->
+<h2 id="logs">9. 日志说明</h2>
+
+<table>
+  <tr><th>位置</th><th>级别</th><th>用途</th></tr>
+  <tr><td>控制台</td><td>INFO</td><td>仅显示重要事件：OCR 结果、用户操作、网络错误</td></tr>
+  <tr><td><code>logs/app.log</code></td><td>DEBUG</td><td>完整记录，含所有截图、OCR 文本、坐标计算细节</td></tr>
+</table>
+
+<p>日志文件自动轮转：单文件最大 1 MB，保留 3 个备份（<code>app.log.1</code> 等）。排查问题时，查看日志文件可获得完整的事件序列。</p>
+
+<div class="note">
+  <strong>正常运行时的典型日志：</strong>
+  <pre>2026-08-05 21:55:46 [INFO   ] [ocr.client] OCR 识别到 2 行文本, mode=1
+2026-08-05 21:55:46 [INFO   ] [ocr.client] OCR 处理完成: message_dic=1 条, bullseye_dic=0 条
+2026-08-05 21:55:46 [INFO   ] [ocr.client] OCR 处理耗时: 0.82 秒</pre>
+</div>
+
+</body>
+</html>
