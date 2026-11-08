@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """通报文本解析 — 支持传统预警机 (AWACS BRA)、SPS 面板、BSC 面板、牛眼通报四种格式。
 
-消除 wordsOCRFlask.py 和 wordsOCR.py 中的重复解析逻辑，
+预警机通报文本解析：SPS / BSC 面板、传统 BRA、牛眼，以及中英文两种风格。
 统一为四个独立、可测试的解析函数。
 """
 

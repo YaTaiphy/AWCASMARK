@@ -14,11 +14,9 @@ _os.chdir(Path(__file__).parent)
 
 from PySide6.QtWidgets import QApplication
 from ui.main_window import MainWindow
-from ocr.screenshot import close_screenshot
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
-    app.aboutToQuit.connect(close_screenshot)   # 释放复用的 mss 实例
     sys.exit(app.exec())

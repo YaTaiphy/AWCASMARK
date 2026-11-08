@@ -71,7 +71,7 @@ def get_logger(name: str) -> logging.Logger:
     """获取指定名称的 Logger 实例。
 
     Args:
-        name: 通常传 __name__，会在日志中显示为 "ocr.parser" 等缩写
+        name: 通常传 __name__，会在日志中显示为 "dcs.parser" 等缩写
 
     Returns:
         配置好的 logging.Logger 实例
@@ -79,7 +79,7 @@ def get_logger(name: str) -> logging.Logger:
     _init_logging()
 
     # 裁剪名称：将顶层包名前缀移除，使日志更简洁
-    # 例如 "ocr.parser" 保持不变，"__main__" → "main"
+    # 例如 "dcs.parser" 保持不变，"__main__" → "main"
     if name == "__main__":
         name = "main"
 

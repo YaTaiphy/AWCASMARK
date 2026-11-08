@@ -25,16 +25,13 @@ logger = get_logger(__name__)
 from window import Ui_MA
 from config import config
 from constants import (
-    TIMER_OCR_MS, TIMER_SCREENSHOT_MS, TIMER_TEAM_MS,
+    TIMER_TEAM_MS,
     DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT,
     DISPLAY_MODE_NGAS, DISPLAY_MODE_SA, DISPLAY_MODE_CENTER_SA,
     OPACITY_MIN, OPACITY_MAX,
 )
 from network.udp_listener import SocketWorker
-from network.http_client import check_server_health
-from worker.ocr_worker import OCRWorker
 from worker.team_worker import TeamWorker
-from ocr.screenshot import take_screenshot
 from ui.radar_widget import RadarWidget
 from dcs.hook_source import HookSource
 from dcs.router import MODE_IGNORED, RouteContext, route
@@ -265,7 +262,6 @@ class MainWindow(QMainWindow, Ui_MA):
         self._resize_start = None      # 开始调尺寸时的全局鼠标位置
         self._mission_running = False
         self._refresh_pending = False  # 刷新节流: resize/UDP 高频更新时合并请求
-        self._ocr_busy = False         # OCR 线程是否正在处理上一轮（忙时不再投递）
         self._team_busy = False        # Team 线程是否正在处理上一轮
 
         # ---- 数据状态 ----
@@ -277,7 +273,6 @@ class MainWindow(QMainWindow, Ui_MA):
         self.message_dic = {}
         self.bullseye_dic = {}
         self.team_members = []
-        self.screen_shot_list = []
         self.args_ready = False
 
         # ---- 雷达控件 ----
@@ -289,20 +284,14 @@ class MainWindow(QMainWindow, Ui_MA):
         self._layout_side_controls()
 
         # ---- 定时器 ----
-        self._timer_ocr = QTimer(self)
-        self._timer_ocr.timeout.connect(self._tick_ocr)
-        self._timer_screen = QTimer(self)
-        self._timer_screen.timeout.connect(self._tick_screenshot)
         self._timer_team = QTimer(self)
         self._timer_team.timeout.connect(self._tick_team)
-        self._timer_house = QTimer(self)          # 过期清理（钩子模式下 OCR 不跑，需要独立清理）
+        self._timer_house = QTimer(self)          # 过期清理
         self._timer_house.timeout.connect(self._tick_house)
 
         # ---- 工作线程 ----
         self._udp_thread = None
         self._udp_worker = None
-        self._ocr_thread = None
-        self._ocr_worker = None
         self._team_thread = None
         self._team_worker = None
 
@@ -838,18 +827,6 @@ class MainWindow(QMainWindow, Ui_MA):
         # ---- DCS 钩子消息源 ----
         self._start_hook_source()
 
-        # ---- OCR 工作线程 ----
-        if not (self._ocr_thread and self._ocr_thread.isRunning()):
-            self._ocr_thread = QThread()
-            self._ocr_worker = OCRWorker()
-            self._ocr_worker.moveToThread(self._ocr_thread)
-            self._ocr_worker.data_received.connect(self._on_ocr_result)
-            self._ocr_worker.finished.connect(self._on_ocr_finished)
-            self._ocr_thread.start()
-        self._ocr_busy = False
-        if self._ocr_worker:
-            self._ocr_worker.reset()
-
         # ---- Team 工作线程 ----
         if not (self._team_thread and self._team_thread.isRunning()):
             self._team_thread = QThread()
@@ -864,9 +841,6 @@ class MainWindow(QMainWindow, Ui_MA):
 
         # ---- 定时器 ----
         self._mission_running = True      # 先置位，避免首个结果被当成"停止后残留"丢弃
-        if config.show_enemy:
-            self._timer_ocr.start(TIMER_OCR_MS)
-            self._timer_screen.start(TIMER_SCREENSHOT_MS)
         if config.show_friend:
             self._timer_team.start(TIMER_TEAM_MS)
         self._timer_house.start(1000)
@@ -883,12 +857,9 @@ class MainWindow(QMainWindow, Ui_MA):
     def _end_mission(self):
         # 先置位：此后到达的结果一律丢弃，避免停止过程中还在刷新界面
         self._mission_running = False
-        self._ocr_busy = False
         self._team_busy = False
 
         # 停止定时器（不再产生新的任务）
-        self._timer_ocr.stop()
-        self._timer_screen.stop()
         self._timer_team.stop()
         self._timer_house.stop()
 
@@ -905,18 +876,11 @@ class MainWindow(QMainWindow, Ui_MA):
                 self._udp_thread = None
                 self._udp_worker = None
 
-        # 停止 OCR / Team 线程（停止旗已置，排队任务会秒退）
-        if self._ocr_thread:
-            if self._shutdown_thread(self._ocr_thread, self._ocr_worker, "OCR", 3000):
-                self._ocr_thread = None
-                self._ocr_worker = None
-
+        # 停止 Team 线程（停止旗已置，排队任务会秒退）
         if self._team_thread:
             if self._shutdown_thread(self._team_thread, self._team_worker, "Team", 3000):
                 self._team_thread = None
                 self._team_worker = None
-
-        self.screen_shot_list.clear()
 
         # 按钮状态: 停止 → 开始
         self.startButton.setText("开始")
@@ -946,59 +910,6 @@ class MainWindow(QMainWindow, Ui_MA):
     # =========================================================================
     # 定时器回调
     # =========================================================================
-
-    def _tick_screenshot(self):
-        # 钩子在线时不截图：省掉整条截图链路（CPU/GPU 都省）
-        if config.message_source != "ocr" and self._hook_alive:
-            return
-        if len(self.screen_shot_list) >= 2:
-            return
-        self.screen_shot_list.clear()
-        r = config.screenshot_region
-        self.screen_shot_list.append(
-            take_screenshot(r["x"], r["y"], r["width"], r["height"])
-        )
-
-    def _tick_ocr(self):
-        if not (self._udp_thread and self._udp_thread.isRunning()):
-            logger.debug("_tick_ocr: UDP 线程未运行，跳过")
-            return
-        if not (self._ocr_thread and self._ocr_thread.isRunning()):
-            logger.debug("_tick_ocr: OCR 线程未运行，跳过")
-            return
-        if not self._ocr_worker:
-            logger.debug("_tick_ocr: OCR worker 不存在，跳过")
-            return
-        # 上一轮还没处理完就不再投递：否则队列只增不减（1 Hz 投递 vs 2 s 处理），
-        # 停止时光是排空队列就要等几十分钟
-        if self._ocr_busy:
-            logger.debug("_tick_ocr: 上一轮 OCR 尚未完成，跳过本轮")
-            return
-        # 钩子在线时不再跑 OCR（auto/hook 模式）
-        if config.message_source != "ocr" and self._hook_alive:
-            logger.debug("_tick_ocr: DCS 钩子在线，跳过 OCR")
-            return
-
-        shots = list(self.screen_shot_list)
-        logger.debug("_tick_ocr: 提交 OCR, screenshots=%d, mode=%s, callsign=%s%s",
-                     len(shots), config.server_mode,
-                     config.call_sign["text"], config.call_sign["num"])
-
-        self._ocr_worker.configure(
-            screenshots=shots,
-            call_sign=config.call_sign,
-            message_dic=self.message_dic,
-            bullseye_dic=self.bullseye_dic,
-            plane_data=self.plane_data,
-            bullseye=config.bullseye,
-        )
-        self._ocr_busy = True
-        try:
-            QMetaObject.invokeMethod(self._ocr_worker, "run",
-                                     Qt.ConnectionType.QueuedConnection)
-        except RuntimeError as exc:
-            self._ocr_busy = False
-            logger.warning("_tick_ocr: 投递 OCR 任务失败: %s", exc)
 
     def _tick_team(self):
         if not (self._udp_thread and self._udp_thread.isRunning()):
@@ -1049,39 +960,12 @@ class MainWindow(QMainWindow, Ui_MA):
         except (ValueError, IndexError) as exc:
             logger.warning("UDP 数据解析错误: %s", exc)
 
-    def _on_ocr_result(self, result):
-        if not self._mission_running:
-            logger.debug("_on_ocr_result: 任务已停止，丢弃迟到结果")
-            return
-        if self._hook_alive and config.message_source != "ocr":
-            # 钩子取代 OCR 后，OCR 的结果会覆盖掉钩子已写入的条目，直接丢弃
-            logger.debug("_on_ocr_result: 钩子在线，忽略 OCR 结果")
-            return
-        if result is None:
-            logger.debug("_on_ocr_result: result=None, 跳过")
-            return
-        message_dic, bullseye_dic = result
-        logger.info("_on_ocr_result: message_dic=%d 条, bullseye_dic=%d 条",
-                     len(message_dic), len(bullseye_dic))
-        for key, msg in message_dic.items():
-            logger.debug("  msg key=%s times=%d alt=%s x=%.0f z=%.0f heading=%s cond=%s",
-                         key, msg.get("times", 0), msg.get("enemy_altitude", "?"),
-                         msg.get("x", 0), msg.get("z", 0),
-                         msg.get("enemy_heading", "?"), msg.get("condition", "?"))
-        self.message_dic = message_dic
-        self.bullseye_dic = bullseye_dic
-        self._refresh_radar()
-
     def _on_team_result(self, team_list):
         if not self._mission_running:
             return
         if team_list is not None:
             self.team_members = team_list
         self._refresh_radar()
-
-    def _on_ocr_finished(self):
-        """OCR 线程完成一轮（含提前返回），解除忙标志。"""
-        self._ocr_busy = False
 
     def _on_team_finished(self):
         """Team 线程完成一轮（含退避/提前返回），解除忙标志。"""
@@ -1093,10 +977,6 @@ class MainWindow(QMainWindow, Ui_MA):
 
     def _start_hook_source(self):
         """启动钩子日志读取（QTimer，不占用线程）。"""
-        if config.message_source == "ocr":
-            logger.info("消息来源=OCR，不启动 DCS 钩子")
-            return
-
         if self._hook_source is None:
             self._hook_source = HookSource(
                 path=config.hook_log_path or None,
@@ -1113,9 +993,9 @@ class MainWindow(QMainWindow, Ui_MA):
     def _on_hook_alive_changed(self, alive: bool):
         self._hook_alive = alive
         if alive:
-            logger.info("DCS 钩子已连接（%s），暂停截图 OCR", self._hook_source.path)
+            logger.info("DCS 钩子已连接（%s）", self._hook_source.path)
         else:
-            logger.info("DCS 钩子失联，回退截图 OCR")
+            logger.warning("DCS 钩子失联：检查 Scripts\\Hooks\\awacs_hook.lua 是否已安装、DCS 是否重启过")
 
     def _on_dcs_message(self, msg):
         """收到一条游戏内文字消息 → 路由 → 写入 message_dic。"""

@@ -14,7 +14,7 @@
 import time as _time
 
 from log import get_logger
-from ocr.parser import (
+from dcs.parser import (
     convert_distance,
     parse_awacs_bra,
     parse_awacs_bra_en,

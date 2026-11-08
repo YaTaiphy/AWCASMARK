@@ -33,7 +33,6 @@ class AppConfig:
         """初始化默认配置值。"""
         self.call_sign = {"text": "abc", "num": "9527"}
         self.bullseye = {"x": 0, "z": 0}
-        self.screenshot_region = {"x": 0, "y": 0, "width": 600, "height": 400}
         self.remaining_time = 90         # 敌机标记残留时间 (秒)
         self.awacs_metric_unit = "auto"  # "auto" / "km" / "nm"；auto 仅对面板类（SPS/BSC）有效
         self.server_mode = 0             # 服务器模式 (0=传统, 1=SPS, 2=BSC)
@@ -47,8 +46,7 @@ class AppConfig:
         self.server_port = 10386
         self.program_id = random.randint(1_000_000_000, 9_999_999_999)
 
-        # ---- 消息来源（DCS 用户钩子 / 截图 OCR） ----
-        self.message_source = "auto"     # auto / hook / ocr
+        # ---- DCS 钩子消息源 ----
         self.message_ttl = 120           # 只读取最近 N 秒的通报
         self.hook_log_path = ""          # 空 = %LOCALAPPDATA%\AWACSMARK\messages.log
         self.hook_heartbeat_timeout = 15 # 超过 N 秒没有心跳判定钩子失联
@@ -84,7 +82,6 @@ class AppConfig:
         data = {
             "call_sign": self.call_sign,
             "bullseye": self.bullseye,
-            "screenshot_region": self.screenshot_region,
             "remaining_time": self.remaining_time,
             "awacs_metric_unit": self.awacs_metric_unit,
             "server_mode": self.server_mode,
@@ -97,7 +94,6 @@ class AppConfig:
             "server_ip": self.server_ip,
             "server_port": self.server_port,
             "program_id": self.program_id,
-            "message_source": self.message_source,
             "message_ttl": self.message_ttl,
             "hook_log_path": self.hook_log_path,
             "hook_heartbeat_timeout": self.hook_heartbeat_timeout,
@@ -109,11 +105,11 @@ class AppConfig:
     def _apply_dict(self, data: dict):
         """将字典中的值应用到实例属性 (仅更新已知键)。"""
         known_keys = {
-            "call_sign", "bullseye", "screenshot_region", "remaining_time",
+            "call_sign", "bullseye", "remaining_time",
             "awacs_metric_unit", "server_mode", "team_code", "show_metrics",
             "show_enemy", "show_friend", "show_friend_time",
             "is_default_server", "server_ip", "server_port", "program_id",
-            "message_source", "message_ttl", "hook_log_path",
+            "message_ttl", "hook_log_path",
             "hook_heartbeat_timeout",
         }
         for key, value in data.items():

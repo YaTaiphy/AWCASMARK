@@ -19,7 +19,7 @@ from config import config
 from radar.grid import draw_radar_grid, draw_aircraft_arrow, draw_altitude_label
 from radar.aircraft import draw_enemy_plane, draw_friend_plane
 from utils import calculate_bearing_and_distance
-from ocr.parser import convert_altitude, convert_distance
+from dcs.parser import convert_altitude, convert_distance
 
 
 def _data_metric(msg: dict) -> str:

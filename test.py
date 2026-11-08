@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""消息解析测试 — 使用新的 ocr.parser 模块验证 SPS/BSC/AWACS 解析正确性。"""
+"""消息解析测试 — 使用 dcs.parser 模块验证 SPS/BSC/AWACS 解析正确性。"""
 
-from ocr.parser import parse_sps_panel, parse_bsc_panel, parse_awacs_bra
+from dcs.parser import parse_sps_panel, parse_bsc_panel, parse_awacs_bra
 from config import config
 
 
