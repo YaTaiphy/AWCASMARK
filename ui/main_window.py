@@ -948,6 +948,9 @@ class MainWindow(QMainWindow, Ui_MA):
     # =========================================================================
 
     def _tick_screenshot(self):
+        # 钩子在线时不截图：省掉整条截图链路（CPU/GPU 都省）
+        if config.message_source != "ocr" and self._hook_alive:
+            return
         if len(self.screen_shot_list) >= 2:
             return
         self.screen_shot_list.clear()
@@ -1049,6 +1052,10 @@ class MainWindow(QMainWindow, Ui_MA):
     def _on_ocr_result(self, result):
         if not self._mission_running:
             logger.debug("_on_ocr_result: 任务已停止，丢弃迟到结果")
+            return
+        if self._hook_alive and config.message_source != "ocr":
+            # 钩子取代 OCR 后，OCR 的结果会覆盖掉钩子已写入的条目，直接丢弃
+            logger.debug("_on_ocr_result: 钩子在线，忽略 OCR 结果")
             return
         if result is None:
             logger.debug("_on_ocr_result: result=None, 跳过")
