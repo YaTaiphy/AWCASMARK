@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """队友同步工作线程 — 可复用的 QThread Worker，替代 remoteTeam.py。"""
 
+import threading
+
 from PySide6.QtCore import QObject, Signal, Slot
 
 from config import config
@@ -17,6 +19,7 @@ class TeamWorker(QObject):
     失败后退避：连续失败后跳过若干周期，避免持续阻塞导致 UI 卡顿。
     """
     data_received = Signal(object)
+    finished = Signal()          # 本轮结束（含退避/提前返回），供主线程清"忙"标志
 
     # 退避参数
     _BACKOFF_CYCLES = 5   # 连续失败后跳过 5 个周期 (~20s @4s 间隔)
@@ -25,6 +28,7 @@ class TeamWorker(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._running = False
+        self._stop_event = threading.Event()
         self._plane_data = {}
         self._server_ip = "127.0.0.1"
         self._server_port = 10386
@@ -46,10 +50,16 @@ class TeamWorker(QObject):
         通过 QMetaObject.invokeMethod + QueuedConnection 调度，
         确保本方法在 Team 专用线程中运行，不阻塞主线程 UI。
         """
+        # 停止后队列里残留的调用直接丢弃
+        if self._stop_event.is_set():
+            self.finished.emit()
+            return
+
         # 退避期间直接跳过
         if self._skip_remaining > 0:
             self._skip_remaining -= 1
             logger.debug("Team 同步退避中… 剩余跳过 %d 次", self._skip_remaining)
+            self.finished.emit()
             return
 
         # 本地拷贝，避免与主线程 configure() 竞争
@@ -82,9 +92,15 @@ class TeamWorker(QObject):
             self.data_received.emit(None)
         finally:
             self._running = False
+            self.finished.emit()
 
     def stop(self):
-        """标记停止。"""
+        """请求停止：置停止旗，后续排队调用会快速返回。"""
         self._running = False
+        self._stop_event.set()
         self._fail_count = 0
         self._skip_remaining = 0
+
+    def reset(self):
+        """重新开始任务前调用，清掉上一次的停止旗。"""
+        self._stop_event.clear()

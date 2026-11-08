@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """OCR 工作线程 — 可复用的 QThread Worker，替代 remoteOCR.py 每次重建的模式。"""
 
+import threading
+
 from PySide6.QtCore import QObject, Signal, Slot
 
 from config import config
@@ -16,11 +18,14 @@ class OCRWorker(QObject):
     通过 data_received 信号返回 (message_dic, bullseye_dic) 元组。
     每次 submit() 设置本轮参数，run() 执行后 emit 结果。
     """
+
     data_received = Signal(object)
+    finished = Signal()          # 本轮 run() 结束（含提前返回），供主线程清"忙"标志
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._running = False
+        self._stop_event = threading.Event()
         self._screenshots = []
         self._call_sign = None
         self._message_dic = {}
@@ -56,6 +61,11 @@ class OCRWorker(QObject):
         通过 QMetaObject.invokeMethod + QueuedConnection 调度，
         确保本方法在 OCR 专用线程中运行，不阻塞主线程 UI。
         """
+        # 停止后队列里残留的调用直接丢弃，避免"停止还要等它跑完"
+        if self._stop_event.is_set():
+            self.finished.emit()
+            return
+
         # 本地拷贝，避免与主线程 configure() 竞争
         screenshots = self._screenshots
         call_sign = self._call_sign
@@ -90,7 +100,13 @@ class OCRWorker(QObject):
             self.data_received.emit((message_dic, bullseye_dic))
         finally:
             self._running = False
+            self.finished.emit()
 
     def stop(self):
-        """标记停止（当前正在执行的 run 会自然完成）。"""
+        """请求停止：置停止旗后，本轮以及后续排队调用都会快速返回。"""
         self._running = False
+        self._stop_event.set()
+
+    def reset(self):
+        """重新开始任务前调用，清掉上一次的停止旗。"""
+        self._stop_event.clear()

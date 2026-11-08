@@ -262,6 +262,8 @@ class MainWindow(QMainWindow, Ui_MA):
         self._resize_start = None      # 开始调尺寸时的全局鼠标位置
         self._mission_running = False
         self._refresh_pending = False  # 刷新节流: resize/UDP 高频更新时合并请求
+        self._ocr_busy = False         # OCR 线程是否正在处理上一轮（忙时不再投递）
+        self._team_busy = False        # Team 线程是否正在处理上一轮
 
         # ---- 数据状态 ----
         self.plane_data = {
@@ -829,7 +831,11 @@ class MainWindow(QMainWindow, Ui_MA):
             self._ocr_worker = OCRWorker()
             self._ocr_worker.moveToThread(self._ocr_thread)
             self._ocr_worker.data_received.connect(self._on_ocr_result)
+            self._ocr_worker.finished.connect(self._on_ocr_finished)
             self._ocr_thread.start()
+        self._ocr_busy = False
+        if self._ocr_worker:
+            self._ocr_worker.reset()
 
         # ---- Team 工作线程 ----
         if not (self._team_thread and self._team_thread.isRunning()):
@@ -837,9 +843,14 @@ class MainWindow(QMainWindow, Ui_MA):
             self._team_worker = TeamWorker()
             self._team_worker.moveToThread(self._team_thread)
             self._team_worker.data_received.connect(self._on_team_result)
+            self._team_worker.finished.connect(self._on_team_finished)
             self._team_thread.start()
+        self._team_busy = False
+        if self._team_worker:
+            self._team_worker.reset()
 
         # ---- 定时器 ----
+        self._mission_running = True      # 先置位，避免首个结果被当成"停止后残留"丢弃
         if config.show_enemy:
             self._timer_ocr.start(TIMER_OCR_MS)
             self._timer_screen.start(TIMER_SCREENSHOT_MS)
@@ -854,48 +865,63 @@ class MainWindow(QMainWindow, Ui_MA):
         # 按钮状态: 开始 → 停止
         self.startButton.setText("停止")
         self.inforButton.setEnabled(False)
-        self._mission_running = True
 
     def _end_mission(self):
-        # 停止定时器
+        # 先置位：此后到达的结果一律丢弃，避免停止过程中还在刷新界面
+        self._mission_running = False
+        self._ocr_busy = False
+        self._team_busy = False
+
+        # 停止定时器（不再产生新的任务）
         self._timer_ocr.stop()
         self._timer_screen.stop()
         self._timer_team.stop()
 
-        # 停止 UDP 线程
+        # 停止 UDP 线程（recvfrom 有 0.5 s 超时，正常 1 s 内退出）
         if self._udp_worker:
             self._udp_worker.stop_listening()
-        if self._udp_thread and self._udp_thread.isRunning():
-            self._udp_thread.quit()
-            self._udp_thread.wait()
-            self._udp_thread = None
-            self._udp_worker = None
+        if self._udp_thread:
+            if self._shutdown_thread(self._udp_thread, self._udp_worker, "UDP", 3000):
+                self._udp_thread = None
+                self._udp_worker = None
 
-        # 停止 OCR 线程
-        if self._ocr_worker:
-            self._ocr_worker.stop()
-        if self._ocr_thread and self._ocr_thread.isRunning():
-            self._ocr_thread.quit()
-            self._ocr_thread.wait()
-            self._ocr_thread = None
-            self._ocr_worker = None
+        # 停止 OCR / Team 线程（停止旗已置，排队任务会秒退）
+        if self._ocr_thread:
+            if self._shutdown_thread(self._ocr_thread, self._ocr_worker, "OCR", 3000):
+                self._ocr_thread = None
+                self._ocr_worker = None
 
-        # 停止 Team 线程
-        if self._team_worker:
-            self._team_worker.stop()
-        if self._team_thread and self._team_thread.isRunning():
-            self._team_thread.quit()
-            self._team_thread.wait()
-            self._team_thread = None
-            self._team_worker = None
+        if self._team_thread:
+            if self._shutdown_thread(self._team_thread, self._team_worker, "Team", 3000):
+                self._team_thread = None
+                self._team_worker = None
 
         self.screen_shot_list.clear()
 
         # 按钮状态: 停止 → 开始
         self.startButton.setText("开始")
         self.inforButton.setEnabled(True)
-        self._mission_running = False
-        self._mission_running = False
+
+    @staticmethod
+    def _shutdown_thread(thread, worker, name: str, timeout_ms: int = 3000) -> bool:
+        """请求线程退出并限时等待。
+
+        返回 True 表示线程已退出（调用方可清空引用）；
+        返回 False 表示超时仍在运行（保留引用，下次停止再试）——绝不无限阻塞 UI。
+        """
+        if worker is not None:
+            try:
+                worker.stop()
+            except Exception as exc:      # 关闭阶段不应抛错
+                logger.warning("%s Worker.stop() 异常: %s", name, exc)
+        if thread is None:
+            return True
+        thread.quit()
+        if thread.wait(timeout_ms):
+            logger.info("%s 线程已退出", name)
+            return True
+        logger.warning("%s 线程 %d ms 内未退出，保留引用（不再阻塞界面）", name, timeout_ms)
+        return False
 
     # =========================================================================
     # 定时器回调
@@ -920,6 +946,11 @@ class MainWindow(QMainWindow, Ui_MA):
         if not self._ocr_worker:
             logger.debug("_tick_ocr: OCR worker 不存在，跳过")
             return
+        # 上一轮还没处理完就不再投递：否则队列只增不减（1 Hz 投递 vs 2 s 处理），
+        # 停止时光是排空队列就要等几十分钟
+        if self._ocr_busy:
+            logger.debug("_tick_ocr: 上一轮 OCR 尚未完成，跳过本轮")
+            return
 
         shots = list(self.screen_shot_list)
         logger.debug("_tick_ocr: 提交 OCR, screenshots=%d, mode=%s, callsign=%s%s",
@@ -934,8 +965,13 @@ class MainWindow(QMainWindow, Ui_MA):
             plane_data=self.plane_data,
             bullseye=config.bullseye,
         )
-        QMetaObject.invokeMethod(self._ocr_worker, "run",
-                                 Qt.ConnectionType.QueuedConnection)
+        self._ocr_busy = True
+        try:
+            QMetaObject.invokeMethod(self._ocr_worker, "run",
+                                     Qt.ConnectionType.QueuedConnection)
+        except RuntimeError as exc:
+            self._ocr_busy = False
+            logger.warning("_tick_ocr: 投递 OCR 任务失败: %s", exc)
 
     def _tick_team(self):
         if not (self._udp_thread and self._udp_thread.isRunning()):
@@ -944,10 +980,18 @@ class MainWindow(QMainWindow, Ui_MA):
             return
         if not self._team_worker:
             return
+        if self._team_busy:
+            logger.debug("_tick_team: 上一轮同步尚未完成，跳过本轮")
+            return
 
         self._team_worker.configure(self.plane_data)
-        QMetaObject.invokeMethod(self._team_worker, "run",
-                                 Qt.ConnectionType.QueuedConnection)
+        self._team_busy = True
+        try:
+            QMetaObject.invokeMethod(self._team_worker, "run",
+                                     Qt.ConnectionType.QueuedConnection)
+        except RuntimeError as exc:
+            self._team_busy = False
+            logger.warning("_tick_team: 投递同步任务失败: %s", exc)
 
     # =========================================================================
     # 信号处理
@@ -979,6 +1023,9 @@ class MainWindow(QMainWindow, Ui_MA):
             logger.warning("UDP 数据解析错误: %s", exc)
 
     def _on_ocr_result(self, result):
+        if not self._mission_running:
+            logger.debug("_on_ocr_result: 任务已停止，丢弃迟到结果")
+            return
         if result is None:
             logger.debug("_on_ocr_result: result=None, 跳过")
             return
@@ -995,6 +1042,16 @@ class MainWindow(QMainWindow, Ui_MA):
         self._refresh_radar()
 
     def _on_team_result(self, team_list):
+        if not self._mission_running:
+            return
         if team_list is not None:
             self.team_members = team_list
         self._refresh_radar()
+
+    def _on_ocr_finished(self):
+        """OCR 线程完成一轮（含提前返回），解除忙标志。"""
+        self._ocr_busy = False
+
+    def _on_team_finished(self):
+        """Team 线程完成一轮（含退避/提前返回），解除忙标志。"""
+        self._team_busy = False

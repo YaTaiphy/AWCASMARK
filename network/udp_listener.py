@@ -68,3 +68,11 @@ class SocketWorker(QObject):
                 sock.close()
             except OSError:
                 pass
+
+    def stop(self):
+        """与 stop_listening 等价 — 统一各 Worker 的关闭接口。"""
+        self.stop_listening()
+
+    def reset(self):
+        """重新开始任务前调用。UDP 监听每次 start 都会重建 socket，无需额外处理。"""
+        self._running = False
