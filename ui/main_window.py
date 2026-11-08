@@ -36,6 +36,9 @@ from worker.ocr_worker import OCRWorker
 from worker.team_worker import TeamWorker
 from ocr.screenshot import take_screenshot
 from ui.radar_widget import RadarWidget
+from dcs.hook_source import HookSource
+from dcs.router import MODE_IGNORED, RouteContext, route
+from dcs import pipeline
 
 
 class MainWindow(QMainWindow, Ui_MA):
@@ -292,6 +295,8 @@ class MainWindow(QMainWindow, Ui_MA):
         self._timer_screen.timeout.connect(self._tick_screenshot)
         self._timer_team = QTimer(self)
         self._timer_team.timeout.connect(self._tick_team)
+        self._timer_house = QTimer(self)          # 过期清理（钩子模式下 OCR 不跑，需要独立清理）
+        self._timer_house.timeout.connect(self._tick_house)
 
         # ---- 工作线程 ----
         self._udp_thread = None
@@ -300,6 +305,11 @@ class MainWindow(QMainWindow, Ui_MA):
         self._ocr_worker = None
         self._team_thread = None
         self._team_worker = None
+
+        # ---- DCS 钩子消息源（GUI 内文字回调，无需线程） ----
+        self._hook_source = None
+        self._hook_alive = False
+        self._unit_warned = False
 
         # ---- 配置迁移 ----
         self._migrate_config()
@@ -825,6 +835,9 @@ class MainWindow(QMainWindow, Ui_MA):
             self._udp_thread.started.connect(self._udp_worker.start_listening)
             self._udp_thread.start()
 
+        # ---- DCS 钩子消息源 ----
+        self._start_hook_source()
+
         # ---- OCR 工作线程 ----
         if not (self._ocr_thread and self._ocr_thread.isRunning()):
             self._ocr_thread = QThread()
@@ -856,6 +869,7 @@ class MainWindow(QMainWindow, Ui_MA):
             self._timer_screen.start(TIMER_SCREENSHOT_MS)
         if config.show_friend:
             self._timer_team.start(TIMER_TEAM_MS)
+        self._timer_house.start(1000)
 
         # ---- 服务器地址 ----
         if config.is_default_server:
@@ -876,6 +890,12 @@ class MainWindow(QMainWindow, Ui_MA):
         self._timer_ocr.stop()
         self._timer_screen.stop()
         self._timer_team.stop()
+        self._timer_house.stop()
+
+        # 停止钩子消息源（只是停一个 QTimer，不会阻塞）
+        if self._hook_source:
+            self._hook_source.stop()
+        self._hook_alive = False
 
         # 停止 UDP 线程（recvfrom 有 0.5 s 超时，正常 1 s 内退出）
         if self._udp_worker:
@@ -950,6 +970,10 @@ class MainWindow(QMainWindow, Ui_MA):
         # 停止时光是排空队列就要等几十分钟
         if self._ocr_busy:
             logger.debug("_tick_ocr: 上一轮 OCR 尚未完成，跳过本轮")
+            return
+        # 钩子在线时不再跑 OCR（auto/hook 模式）
+        if config.message_source != "ocr" and self._hook_alive:
+            logger.debug("_tick_ocr: DCS 钩子在线，跳过 OCR")
             return
 
         shots = list(self.screen_shot_list)
@@ -1055,3 +1079,83 @@ class MainWindow(QMainWindow, Ui_MA):
     def _on_team_finished(self):
         """Team 线程完成一轮（含退避/提前返回），解除忙标志。"""
         self._team_busy = False
+
+    # =========================================================================
+    # DCS 钩子消息源
+    # =========================================================================
+
+    def _start_hook_source(self):
+        """启动钩子日志读取（QTimer，不占用线程）。"""
+        if config.message_source == "ocr":
+            logger.info("消息来源=OCR，不启动 DCS 钩子")
+            return
+
+        if self._hook_source is None:
+            self._hook_source = HookSource(
+                path=config.hook_log_path or None,
+                ttl=config.message_ttl,
+                heartbeat_timeout=config.hook_heartbeat_timeout,
+                parent=self,
+            )
+            self._hook_source.message_received.connect(self._on_dcs_message)
+            self._hook_source.alive_changed.connect(self._on_hook_alive_changed)
+
+        self._hook_alive = False
+        self._hook_source.start()
+
+    def _on_hook_alive_changed(self, alive: bool):
+        self._hook_alive = alive
+        if alive:
+            logger.info("DCS 钩子已连接（%s），暂停截图 OCR", self._hook_source.path)
+        else:
+            logger.info("DCS 钩子失联，回退截图 OCR")
+
+    def _on_dcs_message(self, msg):
+        """收到一条游戏内文字消息 → 路由 → 写入 message_dic。"""
+        if not self._mission_running:
+            return
+
+        ctx = RouteContext(
+            call_sign=config.call_sign,
+            metric_unit=config.awacs_metric_unit,
+            plane_x=self.plane_data.get("x", 0.0),
+            plane_z=self.plane_data.get("z", 0.0),
+            bullseye_x=config.bullseye.get("x", 0.0),
+            bullseye_z=config.bullseye.get("z", 0.0),
+            message_dic=self.message_dic,
+            bullseye_dic=self.bullseye_dic,
+            source="hook",
+        )
+        try:
+            mode = route(msg, ctx)
+        except Exception as exc:              # 单条消息解析失败不能影响后续
+            logger.error("DCS 消息解析异常: %s", exc)
+            return
+
+        if mode == MODE_IGNORED:
+            logger.debug("钩子[%s] 未识别，忽略: %s", msg.kind, msg.text[:60])
+            return
+
+        # 传统预警机通报没有单位，auto 时只能回退 km —— 提示一次，避免用户以为读数不准
+        if (mode in ("awacs", "awacs_en")
+                and config.awacs_metric_unit not in ("km", "nm")
+                and not self._unit_warned):
+            self._unit_warned = True
+            logger.warning("传统预警机单位未定：已按 %s 处理，请在设置中选择 KM 或 NM",
+                           "km" if mode == "awacs" else "nm")
+
+        logger.info("钩子[%s] → %s（敌机 %d 条 / 牛眼 %d 条）",
+                    msg.kind, mode, len(self.message_dic), len(self.bullseye_dic))
+        self._refresh_radar()
+
+    def _tick_house(self):
+        """每秒清理过期标记（钩子模式下 OCR 不跑，必须独立清理）。"""
+        if not self._mission_running:
+            return
+        before = len(self.message_dic) + len(self.bullseye_dic)
+        pipeline.purge_expired(self.message_dic, config.remaining_time)
+        pipeline.purge_expired(self.bullseye_dic, config.remaining_time)
+        if len(self.message_dic) + len(self.bullseye_dic) != before:
+            logger.debug("清理过期标记: %d → %d",
+                         before, len(self.message_dic) + len(self.bullseye_dic))
+            self._schedule_refresh()

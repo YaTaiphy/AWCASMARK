@@ -59,7 +59,8 @@ def draw_enemy_plane(painter: QPainter, center_x: float, center_y: float,
     painter.drawText(int(ex + 6), int(ey - 3), f"{height_display:.1f}")
 
     # ---- SPS/BSC 模式附加信息 ----
-    mode = config.server_mode
+    # 来源模式跟着消息走：同一局可能混入不同服务器的通报
+    mode = message.get("source_mode", config.server_mode)
     if mode == SERVER_MODE_SPS:
         mach = message.get("speed", 0)
         painter.drawText(int(ex + 6), int(ey + 6), f"M{mach:.2f}")

@@ -35,7 +35,7 @@ class AppConfig:
         self.bullseye = {"x": 0, "z": 0}
         self.screenshot_region = {"x": 0, "y": 0, "width": 600, "height": 400}
         self.remaining_time = 90         # 敌机标记残留时间 (秒)
-        self.awacs_metric_unit = "km"    # 预警机通报使用的单位 ("km" / "nm")
+        self.awacs_metric_unit = "auto"  # "auto" / "km" / "nm"；auto 仅对面板类（SPS/BSC）有效
         self.server_mode = 0             # 服务器模式 (0=传统, 1=SPS, 2=BSC)
         self.team_code = "9214"
         self.show_metrics = "km"         # 界面显示单位
@@ -46,6 +46,12 @@ class AppConfig:
         self.server_ip = "127.0.0.1"
         self.server_port = 10386
         self.program_id = random.randint(1_000_000_000, 9_999_999_999)
+
+        # ---- 消息来源（DCS 用户钩子 / 截图 OCR） ----
+        self.message_source = "auto"     # auto / hook / ocr
+        self.message_ttl = 120           # 只读取最近 N 秒的通报
+        self.hook_log_path = ""          # 空 = %LOCALAPPDATA%\AWACSMARK\messages.log
+        self.hook_heartbeat_timeout = 15 # 超过 N 秒没有心跳判定钩子失联
 
     # ---- 持久化 ----
 
@@ -91,6 +97,10 @@ class AppConfig:
             "server_ip": self.server_ip,
             "server_port": self.server_port,
             "program_id": self.program_id,
+            "message_source": self.message_source,
+            "message_ttl": self.message_ttl,
+            "hook_log_path": self.hook_log_path,
+            "hook_heartbeat_timeout": self.hook_heartbeat_timeout,
         }
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2),
@@ -103,6 +113,8 @@ class AppConfig:
             "awacs_metric_unit", "server_mode", "team_code", "show_metrics",
             "show_enemy", "show_friend", "show_friend_time",
             "is_default_server", "server_ip", "server_port", "program_id",
+            "message_source", "message_ttl", "hook_log_path",
+            "hook_heartbeat_timeout",
         }
         for key, value in data.items():
             if key in known_keys and hasattr(self, key):

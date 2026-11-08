@@ -213,9 +213,12 @@ class SettingsDialog(QDialog):
         unit_gb = QGroupBox("预警机通报单位")
         unit_layout = QVBoxLayout(unit_gb)
         self.AWACASMARK_unit = QComboBox()
-        self.AWACASMARK_unit.addItems(["km", "nm"])
+        # auto：SPS/BSC 面板自带单位（NM/ft 或 KM/m），无需设置；
+        # 传统预警机文本里没有单位，必须二选一，auto 会回退 km。
+        self.AWACASMARK_unit.addItems(["auto", "KM", "NM"])
         self.AWACASMARK_unit.setToolTip(
-            "预警机给你报的距离和高度是什么单位的"
+            "auto：SPS/BSC 面板自动识别（推荐）；\n"
+            "传统预警机通报没有单位，请直接选 KM 或 NM"
         )
         unit_layout.addWidget(self.AWACASMARK_unit)
         row.addWidget(unit_gb)
@@ -227,6 +230,16 @@ class SettingsDialog(QDialog):
         self.RemainTime.setToolTip("敌机信息在屏幕上消失的时间（秒）")
         time_layout.addWidget(self.RemainTime)
         row.addWidget(time_gb)
+
+        ttl_gb = QGroupBox("消息保留窗口 (秒)")
+        ttl_layout = QVBoxLayout(ttl_gb)
+        self.MessageTTL = QLineEdit()
+        self.MessageTTL.setPlaceholderText("120")
+        self.MessageTTL.setToolTip(
+            "只读取最近 N 秒的预警机通报（钩子日志窗口），建议不小于残留时间"
+        )
+        ttl_layout.addWidget(self.MessageTTL)
+        row.addWidget(ttl_gb)
 
         layout.addLayout(row)
         layout.addStretch()
@@ -440,8 +453,10 @@ class SettingsDialog(QDialog):
         self.bullsEyeLong.setText(str(config.bullseye["x"]))
 
         # 基本 — 单位 & 残留时间
-        self.AWACASMARK_unit.setCurrentText(config.awacs_metric_unit)
+        _unit = (config.awacs_metric_unit or "auto").lower()
+        self.AWACASMARK_unit.setCurrentText({"km": "KM", "nm": "NM"}.get(_unit, "auto"))
         self.RemainTime.setText(str(config.remaining_time))
+        self.MessageTTL.setText(str(config.message_ttl))
 
         # 截图 — 区域
         self.xEdit.setText(str(config.screenshot_region["x"]))
@@ -542,8 +557,10 @@ class SettingsDialog(QDialog):
             config.screenshot_region["height"] = int(self.heightEdit.text() or "400")
 
             # 单位 & 模式
-            config.awacs_metric_unit = self.AWACASMARK_unit.currentText()
+            _unit_text = self.AWACASMARK_unit.currentText()
+            config.awacs_metric_unit = {"KM": "km", "NM": "nm"}.get(_unit_text, "auto")
             config.remaining_time = int(self.RemainTime.text().strip() or "90")
+            config.message_ttl = max(10, int(self.MessageTTL.text().strip() or "120"))
             config.server_mode = self.serverMode.currentIndex()
 
             # 小队

@@ -255,20 +255,26 @@ def parse_bullseye(ocr_lines: list[str], metric_unit: str,
     return results
 
 
-def parse_sps_panel(ocr_lines: list[str], metric_unit: str) -> list[dict]:
+def parse_sps_panel(ocr_lines: list[str], metric_unit: str = "auto") -> list[dict]:
     """解析 SPS 服务器面板格式。
 
     格式: "机型 编号 方位 距离NM 高度ft 速度Knts 航向 Hot/Cold/Flank"
 
+    metric_unit:
+        "auto"    — 从每行自带的单位词判定（面板一定带 NM/ft 或 KM/m）
+        "nm"/"km" — 强制按该单位校验（旧行为，用于文本单位缺失的兜底）
+
     Returns:
-        敌机数据字典列表
+        敌机数据字典列表，额外带 "distance_unit" / "height_unit" 供上层换算
     """
     condition_feature = ["hot", "cold", "flank", "beam"]
     nm_feature = ["nm", "feet", "ft", "knts"]
     km_feature = ["km", "m"]
 
-    # 根据配置选择特征词
-    if metric_unit == "km":
+    # auto: 不做全行单位过滤，交给每行的单位词判定
+    if metric_unit == "auto":
+        unit_features = None
+    elif metric_unit == "km":
         unit_features = km_feature
     else:
         unit_features = nm_feature
@@ -289,7 +295,7 @@ def parse_sps_panel(ocr_lines: list[str], metric_unit: str) -> list[dict]:
         if not mark:
             continue
 
-        if not any(feat in lower for feat in unit_features):
+        if unit_features is not None and not any(feat in lower for feat in unit_features):
             continue
 
         parts = lower.split()
@@ -349,6 +355,9 @@ def parse_sps_panel(ocr_lines: list[str], metric_unit: str) -> list[dict]:
                 "height": height,
                 "speed": speed,
                 "heading": heading,
+                # 每行自带单位：上层据此换算，不再依赖全局配置
+                "distance_unit": "nm" if "nm" in dist_unit else "km",
+                "height_unit": "ft" if "ft" in height_unit else "m",
             })
         except (ValueError, IndexError) as exc:
             logger.warning("解析 SPS 消息时发生错误: %s", exc)

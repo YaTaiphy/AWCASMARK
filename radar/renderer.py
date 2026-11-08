@@ -22,6 +22,12 @@ from utils import calculate_bearing_and_distance
 from ocr.parser import convert_altitude, convert_distance
 
 
+def _data_metric(msg: dict) -> str:
+    """每条消息自己的原始单位；缺省回退全局配置（老数据兼容）。"""
+    metric = msg.get("data_metric") or config.awacs_metric_unit
+    return metric if metric in ("km", "nm") else "km"
+
+
 class RadarRenderer:
     """雷达渲染器 — 无状态，纯绘制逻辑。"""
 
@@ -258,7 +264,8 @@ class RadarRenderer:
                       scale, radius_interval, max_radius,
                       heading_offset, display_metric):
         for key, msg in message_dic.items():
-            if msg.get("times", 0) <= 1:
+            # OCR 路径保留旧的 times>1 降噪；钩子文本可信，第一条就要画
+            if msg.get("source") != "hook" and msg.get("times", 0) <= 1:
                 continue
 
             distance_m, bearing = calculate_bearing_and_distance(
@@ -271,7 +278,7 @@ class RadarRenderer:
                 distance = distance_m / 1000
 
             alt_display = convert_altitude(msg["enemy_altitude"],
-                                           config.awacs_metric_unit, display_metric)
+                                           _data_metric(msg), display_metric)
 
             elapsed = (int(time.time()) - msg["timeStamp"]) // TIME_ELAPSE_DIVISOR
             elapsed = min(elapsed, TIME_ELAPSE_MAX_LEVEL)
@@ -297,7 +304,7 @@ class RadarRenderer:
                 distance = distance_m / 1000
 
             alt_display = convert_altitude(msg.get("bulls_enemy_altitude", 0),
-                                           config.awacs_metric_unit, display_metric)
+                                           _data_metric(msg), display_metric)
 
             elapsed = (int(time.time()) - msg["timeStamp"]) // TIME_ELAPSE_DIVISOR
             elapsed = min(elapsed, TIME_ELAPSE_MAX_LEVEL)
