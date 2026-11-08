@@ -181,6 +181,18 @@ class MainWindow(QMainWindow, Ui_MA):
         """)
         self._topmost_check.stateChanged.connect(self._toggle_topmost)
 
+        # ---- 飞行数据面板切换复选框（浮动于雷达区左上角） ----
+        self._flight_data_check = QCheckBox("数据", self.centralwidget)
+        self._flight_data_check.setStyleSheet("""
+            QCheckBox {
+                color: #cccccc;
+                background: rgba(20,20,20,160);
+                border-radius: 2px;
+                padding: 2px 6px;
+            }
+        """)
+        self._flight_data_check.stateChanged.connect(self._toggle_flight_data)
+
         # ---- 简要模式控件 ----
         self._compact_restore_btn = QPushButton("恢复", self.centralwidget)
         self._compact_restore_btn.setFixedSize(50, 24)
@@ -252,7 +264,11 @@ class MainWindow(QMainWindow, Ui_MA):
         self._refresh_pending = False  # 刷新节流: resize/UDP 高频更新时合并请求
 
         # ---- 数据状态 ----
-        self.plane_data = {"heading": 270, "x": 0, "y": 2000, "z": 0, "height": 0}
+        self.plane_data = {
+            "heading": 270, "x": 0, "y": 2000, "z": 0, "height": 0,
+            "pitch": 0, "alt_bar": 0, "alt_rad": 0,
+            "true_air_speed": 0, "indicated_air_speed": 0,
+        }
         self.message_dic = {}
         self.bullseye_dic = {}
         self.team_members = []
@@ -425,6 +441,10 @@ class MainWindow(QMainWindow, Ui_MA):
         self._topmost_check.move(32, 4)
         self._topmost_check.raise_()
 
+        # 飞行数据复选框 — 置顶下方
+        self._flight_data_check.move(32, 28)
+        self._flight_data_check.raise_()
+
     def _refresh_radar(self):
         """推数据到雷达控件并重绘。"""
         self.radar_widget.update_data(
@@ -434,6 +454,7 @@ class MainWindow(QMainWindow, Ui_MA):
             team_members=self.team_members,
             display_mode=self.comboBox.currentIndex(),
             scale_index=self.scaleComboBox.currentIndex(),
+            show_data_panel=self._flight_data_check.isChecked(),
         )
 
     def _schedule_refresh(self):
@@ -461,6 +482,13 @@ class MainWindow(QMainWindow, Ui_MA):
         else:
             self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, False)
         self.show()
+
+    def _toggle_flight_data(self, state):
+        """切换飞行数据面板 / 雷达界面。"""
+        self.radar_widget.show_data_panel = (
+            state == Qt.CheckState.Checked.value
+        )
+        self._refresh_radar()
 
     def _change_opacity(self, value):
         self.setWindowOpacity(value / 100.0)
@@ -618,6 +646,7 @@ class MainWindow(QMainWindow, Ui_MA):
         self._scale_slider.hide()
         self._scale_label.hide()
         self._topmost_check.hide()
+        self._flight_data_check.hide()
 
         # 无边框 + 可调尺寸（保留置顶属性）
         self._old_flags = self.windowFlags()
@@ -666,6 +695,7 @@ class MainWindow(QMainWindow, Ui_MA):
         self._scale_slider.show()
         self._scale_label.show()
         self._topmost_check.show()
+        self._flight_data_check.show()
 
         # 隐藏简要模式专属控件
         self._compact_restore_btn.hide()
@@ -928,13 +958,22 @@ class MainWindow(QMainWindow, Ui_MA):
             parts = message.split(",")
             if len(parts) < 10:
                 return
-            self.plane_data = {
+            data = {
                 "heading": float(parts[4]),
                 "x": float(parts[1]),
                 "y": float(parts[2]),
                 "z": float(parts[3]),
                 "height": float(parts[9]),
             }
+            # 新格式 (14 字段): 包含 pitch(5), alt_bar(10), alt_rad(11),
+            #   true_air_speed(12), indicated_air_speed(13)
+            if len(parts) >= 14:
+                data["pitch"] = float(parts[5])
+                data["alt_bar"] = float(parts[10])
+                data["alt_rad"] = float(parts[11])
+                data["true_air_speed"] = float(parts[12])
+                data["indicated_air_speed"] = float(parts[13])
+            self.plane_data = data
             self._schedule_refresh()
         except (ValueError, IndexError) as exc:
             logger.warning("UDP 数据解析错误: %s", exc)

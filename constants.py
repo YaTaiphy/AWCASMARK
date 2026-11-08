@@ -63,6 +63,8 @@ OPACITY_MAX = 100  # 最高透明度 (%)
 NM_TO_M = 1852          # 海里 → 米
 KM_TO_M = 1000          # 公里 → 米
 M_TO_FT = 3.28084       # 米 → 英尺
+MPS_TO_KMH = 3.6        # m/s → km/h
+MPS_TO_KTS = 1.94384    # m/s → 节 (knots)
 KTS_TO_MACH = 1.852 * 0.0008098477486  # 节 → 马赫
 KMH_TO_MACH = 0.0008098477486          # km/h → 马赫
 

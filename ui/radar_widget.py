@@ -19,12 +19,17 @@ class RadarWidget(QWidget):
         self.renderer = RadarRenderer()
 
         # 由 MainWindow 在刷新时写入
-        self.plane_data = {"heading": 270, "x": 0, "y": 2000, "z": 0, "height": 0}
+        self.plane_data = {
+            "heading": 270, "x": 0, "y": 2000, "z": 0, "height": 0,
+            "pitch": 0, "alt_bar": 0, "alt_rad": 0,
+            "true_air_speed": 0, "indicated_air_speed": 0,
+        }
         self.message_dic = {}
         self.bullseye_dic = {}
         self.team_members = []
         self.display_mode = 0       # comboBox 索引
         self.scale_index = 0        # scaleComboBox 索引
+        self.show_data_panel = False  # 飞行数据面板切换
 
         # 避免透明背景导致看不见
         self.setAutoFillBackground(True)
@@ -34,7 +39,7 @@ class RadarWidget(QWidget):
         self.setPalette(pal)
 
     def update_data(self, plane_data, message_dic, bullseye_dic, team_members,
-                    display_mode, scale_index):
+                    display_mode, scale_index, show_data_panel=False):
         """由 MainWindow 调用，更新绘制数据并触发重绘。"""
         self.plane_data = plane_data
         self.message_dic = message_dic
@@ -42,20 +47,30 @@ class RadarWidget(QWidget):
         self.team_members = team_members
         self.display_mode = display_mode
         self.scale_index = scale_index
+        self.show_data_panel = show_data_panel
         self.update()  # 触发 paintEvent
 
     def paintEvent(self, event):
-        """仅在本控件区域内绘制雷达图。"""
+        """仅在本控件区域内绘制雷达图或飞行数据面板。"""
         with QPainter(self) as painter:
-            self.renderer.render(
-                painter=painter,
-                mode=self.display_mode,
-                plane_data=self.plane_data,
-                message_dic=self.message_dic,
-                bullseye_dic=self.bullseye_dic,
-                team_members=self.team_members,
-                width=self.width(),
-                height=self.height(),
-                scale_index=self.scale_index,
-                display_metric=config.show_metrics,
-            )
+            if self.show_data_panel:
+                self.renderer.render_data_panel(
+                    painter=painter,
+                    plane_data=self.plane_data,
+                    width=self.width(),
+                    height=self.height(),
+                    display_metric=config.show_metrics,
+                )
+            else:
+                self.renderer.render(
+                    painter=painter,
+                    mode=self.display_mode,
+                    plane_data=self.plane_data,
+                    message_dic=self.message_dic,
+                    bullseye_dic=self.bullseye_dic,
+                    team_members=self.team_members,
+                    width=self.width(),
+                    height=self.height(),
+                    scale_index=self.scale_index,
+                    display_metric=config.show_metrics,
+                )

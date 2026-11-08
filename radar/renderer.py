@@ -13,6 +13,7 @@ from constants import (
     DISPLAY_MODE_NGAS, DISPLAY_MODE_SA, DISPLAY_MODE_CENTER_SA,
     TIME_ELAPSE_DIVISOR, TIME_ELAPSE_MAX_LEVEL,
     ALTITUDE_LABEL_COLOR,
+    M_TO_FT, MPS_TO_KMH, MPS_TO_KTS,
 )
 from config import config
 from radar.grid import draw_radar_grid, draw_aircraft_arrow, draw_altitude_label
@@ -103,6 +104,121 @@ class RadarRenderer:
         self._draw_bullseyes(painter, center_x, center_y, plane_data,
                              bullseye_dic, scale, radius_interval,
                              max_radius, heading_offset, display_metric)
+
+    # =========================================================================
+    # 飞行数据面板
+    # =========================================================================
+
+    def render_data_panel(self, painter: QPainter, plane_data: dict,
+                          width: int, height: int, display_metric: str = "km"):
+        """绘制飞行数据面板，显示本机关键飞行参数。
+
+        Args:
+            painter: QPainter 实例
+            plane_data: 本机数据 (含 alt_bar, alt_rad, pitch, true_air_speed, indicated_air_speed)
+            width, height: 控件尺寸
+            display_metric: "km"=公制 / "nm"=英制
+        """
+        from PySide6.QtGui import QFont, QColor
+        from PySide6.QtCore import Qt as QtCore
+
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        is_metric = (display_metric == "km")
+
+        # 单位转换
+        if is_metric:
+            alt_bar = plane_data.get("alt_bar", 0)          # 米
+            alt_rad = plane_data.get("alt_rad", 0)          # 米
+            tas = plane_data.get("true_air_speed", 0) * MPS_TO_KMH    # m/s → km/h
+            ias = plane_data.get("indicated_air_speed", 0) * MPS_TO_KMH
+            alt_unit = "m"
+            spd_unit = "km/h"
+        else:
+            alt_bar = plane_data.get("alt_bar", 0) * M_TO_FT   # 米 → 英尺
+            alt_rad = plane_data.get("alt_rad", 0) * M_TO_FT
+            tas = plane_data.get("true_air_speed", 0) * MPS_TO_KTS  # m/s → 节
+            ias = plane_data.get("indicated_air_speed", 0) * MPS_TO_KTS
+            alt_unit = "ft"
+            spd_unit = "kts"
+
+        pitch = plane_data.get("pitch", 0)  # 度，公/英制相同
+
+        # 标签与值
+        rows = [
+            ("海拔高度", f"{alt_bar:.0f} {alt_unit}"),
+            ("雷达高度", f"{alt_rad:.0f} {alt_unit}"),
+            ("俯仰",     f"{pitch:.1f}°"),
+            ("真空速",   f"{tas:.0f} {spd_unit}"),
+            ("指示空速", f"{ias:.0f} {spd_unit}"),
+        ]
+
+        # 面板尺寸与位置（居中）
+        panel_w = min(300, width - 40)
+        row_h = 32
+        title_h = 36
+        padding_v = 16
+        panel_h = title_h + len(rows) * row_h + padding_v * 2
+        panel_x = (width - panel_w) // 2
+        panel_y = (height - panel_h) // 2
+
+        # ---- 面板背景 ----
+        painter.setBrush(QColor(8, 16, 8, 210))
+        painter.setPen(QColor(60, 140, 60, 180))
+        painter.drawRoundedRect(int(panel_x), int(panel_y),
+                               int(panel_w), int(panel_h), 8, 8)
+
+        # ---- 标题 ----
+        title_font = QFont()
+        title_font.setPointSize(13)
+        title_font.setBold(True)
+        painter.setFont(title_font)
+        painter.setPen(QColor(180, 255, 180))
+        painter.drawText(
+            int(panel_x), int(panel_y + 8),
+            int(panel_w), int(title_h),
+            QtCore.AlignmentFlag.AlignHCenter | QtCore.AlignmentFlag.AlignVCenter,
+            "飞行数据",
+        )
+
+        # ---- 分隔线 ----
+        line_y = panel_y + title_h + 4
+        painter.setPen(QColor(60, 140, 60, 120))
+        painter.drawLine(
+            int(panel_x + 20), int(line_y),
+            int(panel_x + panel_w - 20), int(line_y),
+        )
+
+        # ---- 数据行 ----
+        label_font = QFont()
+        label_font.setPointSize(10)
+        painter.setFont(label_font)
+
+        for i, (label, value) in enumerate(rows):
+            ry = panel_y + title_h + padding_v + i * row_h
+
+            # 标签 (左侧, 浅灰绿)
+            painter.setPen(QColor(140, 200, 140))
+            painter.drawText(
+                int(panel_x + 24), int(ry),
+                int(panel_w * 0.42), int(row_h),
+                QtCore.AlignmentFlag.AlignLeft | QtCore.AlignmentFlag.AlignVCenter,
+                label,
+            )
+
+            # 值 (右侧, 亮白绿)
+            val_font = QFont()
+            val_font.setPointSize(11)
+            val_font.setBold(True)
+            painter.setFont(val_font)
+            painter.setPen(QColor(220, 255, 220))
+            painter.drawText(
+                int(panel_x + panel_w * 0.44), int(ry),
+                int(panel_w * 0.52 - 24), int(row_h),
+                QtCore.AlignmentFlag.AlignRight | QtCore.AlignmentFlag.AlignVCenter,
+                value,
+            )
+            painter.setFont(label_font)  # 恢复为标签字体
 
     # =========================================================================
     # 内部辅助

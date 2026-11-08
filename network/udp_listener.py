@@ -13,7 +13,10 @@ logger = get_logger(__name__)
 class SocketWorker(QObject):
     """监听本地 UDP 端口接收 DCS 飞行数据。
 
-    数据格式: timestamp,x,y,z,heading,pitch,bank,lat,long,height
+    数据格式 (14 字段):
+      timestamp,x,y,z,heading,pitch,bank,lat,long,height,altBar,altRad,trueAirSpeed,indicatedAirSpeed
+    向后兼容旧格式 (10 字段):
+      timestamp,x,y,z,heading,pitch,bank,lat,long,height
     """
     data_received = Signal(str)
 

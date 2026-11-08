@@ -179,6 +179,10 @@ text/
 版本号/
 upx-5.1.1-win64/
 
+.dsh-acl-recovery/
+.claude/
+openspec/
+
 logs/
 *.txt
 *.json
