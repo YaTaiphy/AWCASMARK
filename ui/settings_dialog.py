@@ -17,7 +17,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from config import config
-from constants import DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT
+from constants import DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT, FORMAT_CHOICES
 from network.http_client import check_server_health
 from log import get_logger
 
@@ -268,6 +268,20 @@ class SettingsDialog(QDialog):
         team_layout.addRow("小队代码:", self.teamCodeEdit)
         layout.addWidget(team_gb)
 
+        # 消息格式
+        fmt_gb = QGroupBox("消息格式")
+        fmt_layout = QFormLayout(fmt_gb)
+        self.messageFormat = QComboBox()
+        for _value, _label in FORMAT_CHOICES:
+            self.messageFormat.addItem(_label, _value)
+        self.messageFormat.setToolTip(
+            "auto：按文本特征自动识别（推荐）\n"
+            "SPS/BSC 只是通报的排版格式，与服务器无关；\n"
+            "遇到认不出的格式时可在这里强制指定"
+        )
+        fmt_layout.addRow("格式:", self.messageFormat)
+        layout.addWidget(fmt_gb)
+
         layout.addStretch()
         return page
 
@@ -339,6 +353,10 @@ class SettingsDialog(QDialog):
 
         # 功能 — 小队代码
         self.teamCodeEdit.setText(config.team_code)
+
+        # 功能 — 消息格式
+        _fmt_index = self.messageFormat.findData(config.message_format)
+        self.messageFormat.setCurrentIndex(_fmt_index if _fmt_index >= 0 else 0)
 
         # 服务器
         self.serverCheckBox.setChecked(config.is_default_server)
@@ -417,6 +435,9 @@ class SettingsDialog(QDialog):
 
             # 小队
             config.team_code = self.teamCodeEdit.text().strip()
+
+            # 消息格式（SPS/BSC 只是文本格式，不是服务器类型）
+            config.message_format = self.messageFormat.currentData() or "auto"
 
             # 服务器
             config.server_ip = self.serverHostEdit.text().strip()

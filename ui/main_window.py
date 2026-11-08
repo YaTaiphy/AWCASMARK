@@ -1028,6 +1028,7 @@ class MainWindow(QMainWindow, Ui_MA):
             message_dic=self.message_dic,
             bullseye_dic=self.bullseye_dic,
             source="hook",
+            format=config.message_format,
         )
         try:
             mode = route(msg, ctx)

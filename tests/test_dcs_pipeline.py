@@ -198,6 +198,42 @@ def test_trigger_bra_is_routed():
     assert len(ctx.message_dic) == 1
 
 
+def test_forced_format_overrides_detection():
+    """手动指定格式时只走对应解析器；解析不出就返回 ignored，不硬解。"""
+    from constants import FORMAT_AWACS, FORMAT_SPS
+
+    # 强制 SPS：面板文本正常解析
+    ctx = make_ctx(format=FORMAT_SPS)
+    mode = route(DcsMessage(ts=0, kind="trigger", text=SPS_SAMPLE), ctx)
+    assert mode == MODE_SPS and len(ctx.message_dic) == 6
+
+    # 强制 SPS：传统 BRA 不应被当成面板
+    ctx = make_ctx(format=FORMAT_SPS)
+    assert route(DcsMessage(ts=0, kind="radio", text=BRA_SAMPLE), ctx) == MODE_IGNORED
+    assert not ctx.message_dic
+
+    # 强制传统：SPS 面板不应被当成 BRA
+    ctx = make_ctx(format=FORMAT_AWACS)
+    assert route(DcsMessage(ts=0, kind="trigger", text=SPS_SAMPLE), ctx) == MODE_IGNORED
+
+    # 强制传统：正常 BRA 仍然解析
+    ctx = make_ctx(format=FORMAT_AWACS)
+    mode = route(DcsMessage(ts=0, kind="radio", text=BRA_SAMPLE), ctx)
+    assert mode == MODE_AWACS and len(ctx.message_dic) == 1
+
+
+def test_config_migrates_old_server_mode():
+    """老配置只有 server_mode（0..3），应迁移为 message_format。"""
+    from config import AppConfig
+    from constants import FORMAT_SPS
+
+    cfg = AppConfig()
+    cfg.message_format = "auto"
+    cfg._apply_dict({"server_mode": 2})
+    assert cfg.message_format == FORMAT_SPS
+    cfg.message_format = "auto"
+
+
 def test_player_echo_ignored():
     ctx = make_ctx()
     mode = route(DcsMessage(ts=0, kind="radio",

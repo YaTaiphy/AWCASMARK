@@ -10,6 +10,9 @@
 import time as _time
 from dataclasses import dataclass, field
 
+from constants import (
+    FORMAT_AUTO, FORMAT_AWACS, FORMAT_AWACS_EN, FORMAT_BSC, FORMAT_SPS,
+)
 from dcs import pipeline
 from dcs.protocol import DcsMessage, KIND_RADIO, KIND_TRIGGER
 from log import get_logger
@@ -19,11 +22,11 @@ logger = get_logger(__name__)
 # 玩家自己发出的请求（"玩家: Overlord1-1, 128, 请求战场信息"），不能当敌情
 _PLAYER_PREFIXES = ("玩家", "player")
 
-# 路由结果，便于日志与测试
-MODE_SPS = "sps"
-MODE_AWACS = "awacs"
-MODE_AWACS_EN = "awacs_en"
-MODE_BSC = "bsc"
+# 路由结果，便于日志与测试（与消息格式取值一致）
+MODE_SPS = FORMAT_SPS
+MODE_AWACS = FORMAT_AWACS
+MODE_AWACS_EN = FORMAT_AWACS_EN
+MODE_BSC = FORMAT_BSC
 MODE_IGNORED = "ignored"
 
 
@@ -41,6 +44,7 @@ class RouteContext:
     bullseye_dic: dict = field(default_factory=dict)
     source: str = "hook"             # "hook" / "ocr"
     now: int = 0
+    format: str = FORMAT_AUTO        # auto / sps / awacs / awacs_en / bsc
 
 
 def split_lines(text: str) -> list:
@@ -74,6 +78,40 @@ def looks_like_awacs(lines: list) -> bool:
     return " for " in lower and "altitude" in lower
 
 
+def _route_forced(ctx: RouteContext, lines: list, now: int, fmt: str) -> str:
+    """用户显式指定了格式：只走对应解析器，不做特征判断。
+
+    解析不出来就返回 ignored（宁可空着，也不要按错误格式硬解）。
+    """
+    if fmt == FORMAT_SPS:
+        count = pipeline.apply_sps(lines, ctx.metric_unit, ctx.plane_x,
+                                   ctx.plane_z, ctx.message_dic,
+                                   source=ctx.source, now=now)
+        return MODE_SPS if count else MODE_IGNORED
+
+    if fmt == FORMAT_BSC:
+        count = pipeline.apply_bsc(lines, ctx.metric_unit, ctx.plane_x,
+                                   ctx.plane_z, ctx.message_dic,
+                                   source=ctx.source, now=now)
+        return MODE_BSC if count else MODE_IGNORED
+
+    if fmt == FORMAT_AWACS_EN:
+        count = pipeline.apply_awacs_en(
+            lines, ctx.call_sign, ctx.metric_unit, ctx.plane_x, ctx.plane_z,
+            ctx.bullseye_x, ctx.bullseye_z, ctx.message_dic, ctx.bullseye_dic,
+            source=ctx.source, now=now)
+        return MODE_AWACS_EN if count else MODE_IGNORED
+
+    if fmt == FORMAT_AWACS:
+        count = pipeline.apply_awacs(
+            lines, ctx.call_sign, ctx.metric_unit, ctx.plane_x, ctx.plane_z,
+            ctx.bullseye_x, ctx.bullseye_z, ctx.message_dic, ctx.bullseye_dic,
+            source=ctx.source, now=now)
+        return MODE_AWACS if count else MODE_IGNORED
+
+    return MODE_IGNORED
+
+
 def route(msg: DcsMessage, ctx: RouteContext) -> str:
     """把一条消息写进 ctx 的字典，返回使用的模式名。"""
     if is_player_echo(msg.text):
@@ -84,6 +122,11 @@ def route(msg: DcsMessage, ctx: RouteContext) -> str:
         return MODE_IGNORED
 
     now = ctx.now or int(_time.time())
+
+    # 用户显式指定格式时优先，不再自动判断
+    fmt = (ctx.format or FORMAT_AUTO).lower()
+    if fmt != FORMAT_AUTO:
+        return _route_forced(ctx, lines, now, fmt)
 
     # 面板类：只可能出现在触发器文字里
     if msg.kind == KIND_TRIGGER and looks_like_sps_panel(lines):

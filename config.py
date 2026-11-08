@@ -35,7 +35,8 @@ class AppConfig:
         self.bullseye = {"x": 0, "z": 0}
         self.remaining_time = 90         # 敌机标记残留时间 (秒)
         self.awacs_metric_unit = "auto"  # "auto" / "km" / "nm"；auto 仅对面板类（SPS/BSC）有效
-        self.server_mode = 0             # 服务器模式 (0=传统, 1=SPS, 2=BSC)
+        self.message_format = "auto"     # auto / sps / awacs / awacs_en / bsc
+        self.server_mode = 0             # 旧字段：仅兼容老配置，已由 message_format 取代
         self.team_code = "9214"
         self.show_metrics = "km"         # 界面显示单位
         self.show_enemy = True
@@ -84,7 +85,7 @@ class AppConfig:
             "bullseye": self.bullseye,
             "remaining_time": self.remaining_time,
             "awacs_metric_unit": self.awacs_metric_unit,
-            "server_mode": self.server_mode,
+            "message_format": self.message_format,
             "team_code": self.team_code,
             "show_metrics": self.show_metrics,
             "show_enemy": self.show_enemy,
@@ -106,7 +107,8 @@ class AppConfig:
         """将字典中的值应用到实例属性 (仅更新已知键)。"""
         known_keys = {
             "call_sign", "bullseye", "remaining_time",
-            "awacs_metric_unit", "server_mode", "team_code", "show_metrics",
+            "awacs_metric_unit", "message_format", "server_mode",
+            "team_code", "show_metrics",
             "show_enemy", "show_friend", "show_friend_time",
             "is_default_server", "server_ip", "server_port", "program_id",
             "message_ttl", "hook_log_path",
@@ -115,6 +117,11 @@ class AppConfig:
         for key, value in data.items():
             if key in known_keys and hasattr(self, key):
                 setattr(self, key, value)
+
+        # 老配置只有 server_mode（0=传统,1=英文,2=SPS,3=BSC）→ 迁移成 message_format
+        if "message_format" not in data and "server_mode" in data:
+            self.message_format = {0: "awacs", 1: "awacs_en",
+                                   2: "sps", 3: "bsc"}.get(self.server_mode, "auto")
 
 
 # =============================================================================

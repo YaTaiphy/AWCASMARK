@@ -84,11 +84,26 @@ DISPLAY_MODE_NGAS = 0        # 中心绝对方位 (北向上)
 DISPLAY_MODE_SA = 1          # 底部中心 / 机头向上
 DISPLAY_MODE_CENTER_SA = 2   # 中心 / 机头向上
 
-# 服务器模式枚举
+# 服务器模式枚举（旧配置兼容；新版本按"消息格式"路由）
 SERVER_MODE_AWACS = 0      # 传统预警机 (左侧文本 BRA, 中文)
 SERVER_MODE_AWACS_EN = 1   # 传统预警机 (英文, BRA + 牛眼)
 SERVER_MODE_SPS = 2        # SPS 服务器 (右侧面板, 英文)
 SERVER_MODE_BSC = 3        # BSC 服务器
+
+# 消息格式：SPS 只是文本格式之一，与"服务器"无关
+FORMAT_AUTO = "auto"
+FORMAT_SPS = "sps"
+FORMAT_AWACS = "awacs"
+FORMAT_AWACS_EN = "awacs_en"
+FORMAT_BSC = "bsc"
+
+FORMAT_CHOICES = [
+    (FORMAT_AUTO, "auto（自动识别，推荐）"),
+    (FORMAT_SPS, "SPS 面板（TYPE/BRG 表）"),
+    (FORMAT_AWACS, "传统预警机（中文 BRA）"),
+    (FORMAT_AWACS_EN, "传统预警机（英文 BRA）"),
+    (FORMAT_BSC, "BSC 面板"),
+]
 
 # 接敌状态
 CONDITION_HOT = 1       # 迎头
