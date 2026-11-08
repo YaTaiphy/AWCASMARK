@@ -6,12 +6,11 @@
 --       确认之后，再决定把 AWACSMARK 的截图 OCR 换成哪个来源。
 --
 -- 安装：复制到
---       <Saved Games>\<DCS 变体>\Scripts\Hooks\awacs_probe.lua
---       本机实测写目录为 C:\Users\adminstor\Saved Games\DCS F-100D
---       （没有 Scripts 目录就自己建：Scripts\Hooks\）
+--       F:\C盘转移\Saved Games\DCS\Scripts\Hooks\awacs_probe.lua
+--       （与现有 TacviewGameGUI.lua / DCS-SRS-hook.lua 同目录）
 --       DCS 启动时按文件名排序加载该目录，运行中新增/修改不会生效，需重启游戏。
 --
--- 输出：<Saved Games>\<DCS 变体>\Logs\awacs_probe.log
+-- 输出：F:\C盘转移\Saved Games\DCS\Logs\awacs_probe.log
 --
 -- 依据：API\Sim_ControlAPI.md（官方《Simulation Control User Scripts》）
 --       - 用户钩子加载进 GUI Lua 状态，每个脚本独立环境（isolated environment）
@@ -82,13 +81,21 @@ function cb.onChatMessage(message, from)
     log('onChatMessage', message, from)
 end
 
--- ---- 多人聊天补漏：轮询聊天历史（防止 onChatMessage 漏掉） ----------------
--- 每 3 秒拉一次增量；不需要可以整段删除。
+-- ---- 每帧回调：心跳 + 多人聊天补漏 ----------------------------------------
 local lastChatIndex = 0
 local lastPoll = 0
+local lastBeat = 0
 function cb.onSimulationFrame()
-    if not (API.getRealTime and net and net.get_chat_history) then return end
     local now = os.time()
+
+    -- 心跳：每 5 秒一行，Python 侧据此判断钩子是否存活
+    if now - lastBeat >= 5 then
+        lastBeat = now
+        log('HEARTBEAT', 'alive')
+    end
+
+    -- 聊天历史轮询（防止 onChatMessage 漏掉），每 3 秒拉一次增量
+    if not (net and net.get_chat_history) then return end
     if now - lastPoll < 3 then return end
     lastPoll = now
     local ok, history, idx = pcall(net.get_chat_history, lastChatIndex)
