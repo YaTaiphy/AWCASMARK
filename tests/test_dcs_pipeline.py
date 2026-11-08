@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dcs import pipeline                                   # noqa: E402
 from dcs.hook_source import HookLogReader                  # noqa: E402
+from dcs.parser import parse_awacs_bra                     # noqa: E402
 from dcs.protocol import (                                 # noqa: E402
     DcsMessage, Heartbeat, Rotation, escape, parse_line, unescape,
 )
@@ -165,6 +166,28 @@ def test_awacs_bullseye():
     dist, brg = calculate_bearing_and_distance(1000, 2000, entry["x"], entry["z"])
     assert abs(dist - 190_000) < 1.0, dist
     assert abs(brg - 75) < 0.5, brg
+
+
+def test_callsign_matching():
+    """接收方既可能是纯数字，也可能是 'Uzi 1-1' 这类字母+数字。"""
+
+    def radio(receiver):
+        return (f"预警机 (Overlord1-1): {receiver}, Overlord1-1, 敌情 (BRA), "
+                "351 方位, 距离 210, 高度 11000, 尾追")
+
+    cases = [
+        ({"text": "", "num": "128"}, "128", 1),
+        ({"text": "Uzi", "num": "11"}, "Uzi 11", 1),
+        ({"text": "Uzi", "num": "11"}, "Uzi 1-1", 1),
+        ({"text": "Uzi", "num": "11"}, "UZI-11", 1),
+        ({"text": "Uzi", "num": "11"}, "Uzi 12", 0),
+        ({"text": "Uzi", "num": "1"}, "Uzi 11", 0),     # 不能因为末位相同就误匹配
+        ({"text": "", "num": "128"}, "5128", 0),
+        ({"text": "Uzi", "num": "11"}, "128", 0),
+    ]
+    for call_sign, receiver, expected in cases:
+        got = len(parse_awacs_bra([radio(receiver)], call_sign, "km", 0, 0))
+        assert got == expected, f"{call_sign} vs {receiver!r}: {got} != {expected}"
 
 
 def test_player_echo_ignored():

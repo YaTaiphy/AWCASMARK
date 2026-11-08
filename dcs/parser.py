@@ -130,22 +130,44 @@ def _heading_from_condition(bearing: int, condition: int) -> int:
 # 呼号匹配
 # =============================================================================
 
-def _match_callsign(ocr_text: str, call_sign: dict) -> bool:
-    """检查 OCR 识别的呼号是否匹配配置的呼号。"""
-    if call_sign["text"] == "":
-        # 仅数字呼号
-        ocr_num = _correct_numbers(ocr_text.split(":")[-1].strip())
-        return call_sign["num"] == ocr_num
-    else:
-        ocr_parts = ocr_text.split(":")[-1].strip()
-        ocr_num = _correct_numbers(ocr_parts[-len(call_sign["num"]):])
-        if call_sign["num"] != ocr_num:
-            return False
-        if ocr_parts:
-            ocr_first = _correct_letters(ocr_parts[0]).lower()
-            expected_first = call_sign["text"][0].lower()
-            return ocr_first == expected_first
+_CALLSIGN_STRIP = re.compile(r"[^0-9a-z]")
+
+
+def _norm_callsign(text: str) -> str:
+    """归一化呼号：小写并去掉空格、连字符等分隔符。
+
+    "Uzi 1-1" / "UZI-11" / "uzi11" 归一化后都是 "uzi11"，
+    与配置里的 text（字母）+ num（数字）拼接结果一致。
+    """
+    return _CALLSIGN_STRIP.sub("", (text or "").lower())
+
+
+def _match_callsign(receiver_field: str, call_sign: dict) -> bool:
+    """判断通报的接收方是不是自己。
+
+    报文格式（实机）：
+        预警机 (Overlord1-1): 128, Overlord1-1, 敌情 (BRA), 351 方位, ...
+        └─ 类别 ─┘ └ AWACS 自称 ┘ └接收方┘ └ 发送方 ┘
+
+    接收方（第 0 段的冒号之后）才是自己的呼号，可能是纯数字 "128"，
+    也可能是字母+数字 "Uzi 1-1"。配置拆成 text + num，这里归一化后整体比较。
+    """
+    receiver = receiver_field.split(":")[-1]
+    got = _norm_callsign(receiver)
+    if not got:
         return False
+
+    text = str(call_sign.get("text", "") or "")
+    num = str(call_sign.get("num", "") or "")
+    want = _norm_callsign(text + num)
+    if not want:
+        return False
+
+    if got == want:
+        return True
+    # 英文呼号前面可能还带着别的词（如 "108th Uzi 1-1"），允许后缀匹配；
+    # 纯数字呼号则必须完全相等，避免 "128" 命中 "5128"。
+    return bool(text) and got.endswith(want)
 
 
 # =============================================================================
