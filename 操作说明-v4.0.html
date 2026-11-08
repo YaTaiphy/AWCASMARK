@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWACSMARK v4.0 操作说明</title>
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --surface: #1a1a1a;
+    --border: #333;
+    --text: #cccccc;
+    --text-dim: #888;
+    --accent: #00cc77;
+    --accent-dim: #008844;
+    --warn: #e09030;
+    --danger: #e05050;
+    --blue: #4090d0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  h1 {
+    font-size: 2em;
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent-dim);
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+  }
+  h2 {
+    font-size: 1.4em;
+    color: #e0e0e0;
+    margin-top: 40px;
+    margin-bottom: 16px;
+    padding-left: 10px;
+    border-left: 4px solid var(--accent);
+  }
+  h3 {
+    font-size: 1.1em;
+    color: #d0d0d0;
+    margin-top: 24px;
+    margin-bottom: 10px;
+  }
+  p { margin-bottom: 12px; }
+  ul, ol { margin: 8px 0 16px 24px; }
+  li { margin-bottom: 6px; }
+  code {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 0.9em;
+    color: #e0c060;
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 18px;
+    overflow-x: auto;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 0.85em;
+    margin-bottom: 16px;
+    line-height: 1.6;
+    color: #c0c0c0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--surface);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  td { font-size: 0.92em; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .note {
+    background: rgba(0, 170, 100, 0.08);
+    border: 1px solid var(--accent-dim);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    color: var(--accent);
+  }
+  .warn {
+    background: rgba(224, 144, 48, 0.08);
+    border: 1px solid var(--warn);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    color: var(--warn);
+  }
+  .danger {
+    background: rgba(224, 80, 80, 0.08);
+    border: 1px solid var(--danger);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    color: var(--danger);
+  }
+  .toc { margin-bottom: 36px; }
+  .toc a { color: var(--blue); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc li { margin-bottom: 4px; }
+  .key { display: inline-block; background: var(--surface); border: 1px solid #555; border-radius: 3px; padding: 2px 8px; font-size: 0.85em; margin: 0 2px; }
+  img { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; margin: 12px 0; }
+  .step { counter-increment: step-counter; }
+  .step::before {
+    content: counter(step-counter);
+    display: inline-block;
+    width: 24px; height: 24px;
+    background: var(--accent-dim);
+    color: #fff;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 24px;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-right: 8px;
+  }
+</style>
+</head>
+<body>
+
+<h1>AWACSMARK v4.0 操作说明</h1>
+
+<p><strong>适用版本：</strong>AWCASMARKER_v4.0_TEST.exe 及同期源码<br>
+<strong>适用游戏：</strong>DCS World 2.9.x（单人 / 多人均可）</p>
+
+<div class="note">
+<strong>v4.0 最大变化：</strong>不再截图 + OCR，改为读取 <strong>DCS 用户钩子</strong> 提供的游戏内文字通报。
+识别结果是原始文本，零误识、无延迟、不占显存；程序也不再需要联网做文字识别。
+</div>
+
+<h2>目录</h2>
+<ul class="toc">
+  <li><a href="#how">一、程序原理</a></li>
+  <li><a href="#files">二、文件与脚本位置</a></li>
+  <li><a href="#install">三、安装步骤</a></li>
+  <li><a href="#config">四、设置项说明</a></li>
+  <li><a href="#use">五、界面操作</a></li>
+  <li><a href="#faq">六、常见问题</a></li>
+  <li><a href="#logs">七、日志与排查</a></li>
+  <li><a href="#build">八、构建（开发者）</a></li>
+</ul>
+
+<h2 id="how">一、程序原理</h2>
+
+<p>DCS 里所有显示给玩家的文字（预警机通报、服务器公告、无线电字幕）都会经过 GUI Lua 状态的一组回调。
+AWACSMARK 用一个官方支持的<strong>用户钩子</strong>把这批文字原样写入本地文件，主程序再增量读取、解析、绘制。</p>
+
+<pre>
+DCS 任务脚本 / AI
+  trigger.action.outText(...)  /  AWACS 无线电通话
+        │
+        ▼  GUI Lua 回调（官方 API）
+  awacs_hook.lua   ← 放在 Saved Games\DCS\Scripts\Hooks\
+  onTriggerMessage / onRadioMessage / onChatMessage
+        │  追加写入（每局截断、1 MB 上限、每 5 s 心跳）
+        ▼
+  %LOCALAPPDATA%\AWACSMARK\messages.log
+        │  每 200 ms 只读新增字节（不复读、不重复解析）
+        ▼
+  AWCASMARKER_v4.0_TEST.exe
+  ├─ 协议解析（消息 / 心跳 / 截断标记）
+  ├─ 格式路由：auto / SPS 面板 / 传统中文 / 传统英文 / BSC
+  ├─ 文本解析：方位、距离、高度、速度、航向、接敌状态
+  ├─ 坐标换算：相对本机（BRA）或相对靶眼（Bullseye）→ 绝对坐标
+  └─ 雷达绘制（30 fps，按残留时间淡出）
+
+并行两路数据：
+  DCS Lua Export（AWCSMARK.lua）──UDP 12345，10 Hz──▶ 本机位置 / 航向 / 高度 / 速度
+  队友服务器 ───────────────HTTP──────────────────▶ 友机位置
+</pre>
+
+<h3>为什么不再用截图 OCR</h3>
+<table>
+  <tr><th>对比项</th><th>截图 + OCR（v3 及以前）</th><th>DCS 用户钩子（v4）</th></tr>
+  <tr><td>识别结果</td><td>有误识（O/0、Km/Kmh、断行）</td><td>原始字符串，无误差</td></tr>
+  <tr><td>延迟</td><td>2–3 秒（截图 + 上传 + 识别）</td><td>毫秒级（写文件 + 200 ms 轮询）</td></tr>
+  <tr><td>开销</td><td>持续截屏、图像编码、上传</td><td>一次字符串写盘 + 少量读取</td></tr>
+  <tr><td>依赖</td><td>远程 OCR 服务器、截图区域必须正确</td><td>只需本地文件，离线可用</td></tr>
+  <tr><td>误检</td><td>桌面/菜单内容可能被识别成敌机</td><td>只处理游戏内回调的文字</td></tr>
+</table>
+
+<h2 id="files">二、文件与脚本位置</h2>
+
+<table>
+  <tr><th>文件</th><th>放到哪里</th><th>必需</th><th>作用</th></tr>
+  <tr>
+    <td><code>awacs_hook.lua</code></td>
+    <td><code>&lt;保存的游戏&gt;\DCS\Scripts\Hooks\</code></td>
+    <td>必需</td>
+    <td>接收游戏内文字并写入日志；DCS 启动时加载</td>
+  </tr>
+  <tr>
+    <td><code>AWCSMARK.lua</code></td>
+    <td><code>&lt;保存的游戏&gt;\DCS\Scripts\</code></td>
+    <td>必需</td>
+    <td>通过 UDP 12345 发送本机飞行数据（10 Hz）</td>
+  </tr>
+  <tr>
+    <td><code>Export.lua</code></td>
+    <td><code>&lt;保存的游戏&gt;\DCS\Scripts\</code></td>
+    <td>需修改</td>
+    <td>加两行挂载上面的 AWCSMARK.lua</td>
+  </tr>
+  <tr>
+    <td><code>AWCASMARKER_v4.0_TEST.exe</code></td>
+    <td>任意目录（建议单独文件夹）</td>
+    <td>必需</td>
+    <td>主程序</td>
+  </tr>
+  <tr>
+    <td><code>messages.log</code></td>
+    <td><code>%LOCALAPPDATA%\AWACSMARK\</code></td>
+    <td>自动生成</td>
+    <td>钩子写入的文字日志</td>
+  </tr>
+  <tr>
+    <td><code>AWACASConfig.json</code></td>
+    <td><code>%LOCALAPPDATA%\</code></td>
+    <td>自动生成</td>
+    <td>程序设置</td>
+  </tr>
+  <tr>
+    <td><code>app.log</code></td>
+    <td><code>&lt;程序目录&gt;\logs\</code></td>
+    <td>自动生成</td>
+    <td>运行日志（排查用）</td>
+  </tr>
+</table>
+
+<div class="warn">
+<strong>“保存的游戏”在哪？</strong>通常是 <code>C:\Users\你的用户名\Saved Games\DCS</code>，
+但也可能被系统重定向到别的盘（例如 <code>F:\C盘转移\Saved Games\DCS</code>），
+或者叫 <code>DCS.openbeta</code> 等其他名字。<br>
+最可靠的办法：在 DCS 里随便截一张图，然后在“保存的游戏”里看哪个文件夹新增了 <code>ScreenShots</code>。
+</div>
+
+<h2 id="install">三、安装步骤</h2>
+
+<ol style="list-style:none; margin-left:0; counter-reset: step-counter;">
+  <li class="step"><strong>放置消息钩子</strong><br>
+    把 <code>awacs_hook.lua</code> 复制到 <code>&lt;保存的游戏&gt;\DCS\Scripts\Hooks\</code>。
+    没有 <code>Hooks</code> 文件夹就自己新建一个。<br>
+    <span style="color:var(--text-dim)">该目录下可能已有 Tacview / SRS / LotAtC 的钩子，互不影响。</span>
+  </li>
+
+  <li class="step"><strong>放置飞行数据脚本</strong><br>
+    把 <code>AWCSMARK.lua</code> 复制到 <code>&lt;保存的游戏&gt;\DCS\Scripts\</code>。
+  </li>
+
+  <li class="step"><strong>在 Export.lua 里挂载</strong><br>
+    打开同目录的 <code>Export.lua</code>，在<strong>末尾</strong>加两行：
+<pre>local lfs = require('lfs')
+dofile(lfs.writedir() .. 'Scripts/AWCSMARK.lua')</pre>
+    <span style="color:var(--text-dim)">如果原来的 AWCSMARK 行是注释状态（以 <code>--</code> 开头），先删掉旧行再加。</span>
+  </li>
+
+  <li class="step"><strong>重启 DCS</strong><br>
+    钩子与 Export 脚本只在游戏启动时加载一次，<strong>装完必须完全退出并重启游戏</strong>。
+  </li>
+
+  <li class="step"><strong>运行程序并配置</strong><br>
+    双击 <code>AWCASMARKER_v4.0_TEST.exe</code>，点击工具栏 <span class="key">信息查看</span>，
+    填写代号、靶眼坐标、单位，确认保存。
+  </li>
+
+  <li class="step"><strong>开始任务</strong><br>
+    进入游戏内任务后，点击程序上的 <span class="key">开始</span> 按钮。
+    标题栏不再显示“未检测到 DCS 钩子”即表示钩子已连上。
+  </li>
+</ol>
+
+<h2 id="config">四、设置项说明</h2>
+
+<table>
+  <tr><th>设置项</th><th>说明</th></tr>
+  <tr>
+    <td>代号 (Callsign)</td>
+    <td>预警机对你的称呼，<strong>只填自己的部分</strong>。可以填 <code>128</code>，也可以填 <code>Uzi 1-1</code>；
+    程序会把空格、连字符忽略后比较。<br>
+    <span style="color:var(--text-dim)">注意：报文里 <code>预警机 (Overlord1-1)</code> 的 Overlord1-1 是预警机自称，不要填。</span></td>
+  </tr>
+  <tr>
+    <td>靶眼坐标 X / Z</td>
+    <td>任务编辑器里 Bullseye 的坐标。只有“牛眼通报”需要它，不填会导致牛眼目标全部堆在原点。</td>
+  </tr>
+  <tr>
+    <td>预警机单位</td>
+    <td><code>auto</code> / <code>KM</code> / <code>NM</code>。<br>
+    SPS、BSC 面板自带单位，<code>auto</code> 会自动识别；<br>
+    <strong>传统预警机通报没有单位</strong>，必须手选 KM 或 NM（选 auto 会按 KM 处理并提示一次）。</td>
+  </tr>
+  <tr>
+    <td>消息格式</td>
+    <td><code>auto</code>（推荐）/ SPS 面板 / 传统(中文) / 传统(英文) / BSC 面板。<br>
+    SPS、BSC 只是通报的<strong>排版格式</strong>，与服务器类型无关。认不出格式时可手动锁定。</td>
+  </tr>
+  <tr>
+    <td>敌机残留时间</td>
+    <td>标记在屏幕上保留多少秒（默认 90）。同一目标被再次播报会重新计时。</td>
+  </tr>
+  <tr>
+    <td>消息保留窗口</td>
+    <td>只读取最近多少秒的通报（默认 120，应 ≥ 残留时间）。</td>
+  </tr>
+  <tr>
+    <td>小队代码</td>
+    <td>队友位置共享用，同一个代码的人互相可见。</td>
+  </tr>
+  <tr>
+    <td>服务器</td>
+    <td>队友同步服务器地址；用默认服务器时无需修改。</td>
+  </tr>
+</table>
+
+<h2 id="use">五、界面操作</h2>
+
+<table>
+  <tr><th>位置</th><th>控件</th><th>作用</th></tr>
+  <tr><td>工具栏</td><td>开始 / 停止</td><td>启动或停止任务（UDP 监听 + 钩子读取 + 队友同步）</td></tr>
+  <tr><td>工具栏</td><td>信息查看</td><td>打开设置对话框</td></tr>
+  <tr><td>工具栏</td><td>模式</td><td>中心（北向上）/ 直对（机头向上）/ 中心直对</td></tr>
+  <tr><td>工具栏</td><td>单位</td><td>界面显示单位：km 或 nm（只影响显示，不改变解析）</td></tr>
+  <tr><td>左侧</td><td>垂直滑块</td><td>窗口透明度 20%–100%</td></tr>
+  <tr><td>右侧</td><td>垂直滑块 + 标签</td><td>雷达比例尺：50 / 100 / 200 km（或 25 / 50 / 100 nm）</td></tr>
+  <tr><td>左上角</td><td>「置顶」复选框</td><td>窗口始终保持在最前</td></tr>
+  <tr><td>左上角</td><td>「数据」复选框</td><td>切换为飞行数据面板（海拔 / 雷达高度 / 俯仰 / 真空速 / 指示空速）</td></tr>
+  <tr><td>工具栏</td><td>简要</td><td>无边框全屏雷达，可拖动、可调尺寸，适合叠加在游戏画面上</td></tr>
+</table>
+
+<h3>雷达标记怎么看</h3>
+<ul>
+  <li><strong>圆点</strong>：敌机位置；颜色越亮越新，随时间从青色渐变为暗蓝直至消失。</li>
+  <li><strong>圆点旁数字</strong>：高度（千单位）。</li>
+  <li><strong>箭头</strong>：敌机航向（由接敌状态推算，SPS 面板直接用通报里的 HDG）。</li>
+  <li><strong>SPS 面板来源</strong>：额外显示 <code>M0.78</code>（马赫）和机型编号。</li>
+  <li><strong>蓝色标记</strong>：队友。</li>
+</ul>
+
+<h2 id="faq">六、常见问题</h2>
+
+<table>
+  <tr><th>现象</th><th>原因与处理</th></tr>
+  <tr>
+    <td>雷达上完全没有敌机</td>
+    <td>先看窗口标题：若显示「未检测到 DCS 钩子」，说明钩子没生效——
+      检查 <code>awacs_hook.lua</code> 是否在 <code>Scripts\Hooks\</code>、装完是否重启过 DCS、文件是否有读取权限。</td>
+  </tr>
+  <tr>
+    <td>所有敌机都挤在中心</td>
+    <td>没收到本机飞行数据。检查 <code>Export.lua</code> 是否挂载了 <code>AWCSMARK.lua</code>、是否重启过游戏。</td>
+  </tr>
+  <tr>
+    <td>传统预警机的距离明显不对</td>
+    <td>设置里单位是 <code>auto</code>，但传统通报不含单位。请改选 <code>KM</code> 或 <code>NM</code>。</td>
+  </tr>
+  <tr>
+    <td>牛眼目标整体偏移</td>
+    <td>靶眼坐标填错。核对任务编辑器里的 Bullseye X/Z。</td>
+  </tr>
+  <tr>
+    <td>预警机报了点，但程序没反应</td>
+    <td>多半是呼号没对上：程序只处理“点名给自己”的通报。确认设置里的代号与游戏内一致。</td>
+  </tr>
+  <tr>
+    <td>某些通报完全识别不了</td>
+    <td>把「消息格式」从 auto 改成对应的格式（SPS / 传统 / BSC）再试。</td>
+  </tr>
+  <tr>
+    <td>点击「停止」没反应</td>
+    <td>v4 已修复该问题（旧版是任务队列堆积，跑越久停得越慢）。若仍出现，请附上 <code>logs\app.log</code>。</td>
+  </tr>
+</table>
+
+<h2 id="logs">七、日志与排查</h2>
+
+<table>
+  <tr><th>文件</th><th>用途</th></tr>
+  <tr>
+    <td><code>%LOCALAPPDATA%\AWACSMARK\messages.log</code></td>
+    <td>钩子写入的原始文字。里面有 <code>H</code> 开头的行表示心跳（每 5 秒一行）；
+      <code>M</code> 开头是消息；文件每局开始会清空，最大 1 MB。</td>
+  </tr>
+  <tr>
+    <td><code>&lt;程序目录&gt;\logs\app.log</code></td>
+    <td>程序运行日志（DEBUG 级）。会记录钩子连接/失联、每条消息路由到哪种格式、解析结果条数。</td>
+  </tr>
+</table>
+
+<div class="note">
+排查顺序：<br>
+① <code>messages.log</code> 有没有内容 → 没有 = 钩子没装好；<br>
+② 有 <code>H</code> 心跳但没有 <code>M</code> → 游戏里没触发通报，或通报走了别的回调；<br>
+③ 有 <code>M</code> 但界面没标记 → 看 <code>app.log</code> 里这条消息被路由成了什么、解析出几条。
+</div>
+
+<h2 id="build">八、构建（开发者）</h2>
+
+<pre>.\installpack\Scripts\python.exe -m nuitka ^
+  --standalone --onefile ^
+  --enable-plugin=pyside6 ^
+  --enable-plugin=upx ^
+  --upx-binary=".\upx-5.1.1-win64\upx.exe" ^
+  --windows-console-mode=disable ^
+  --windows-icon-from-ico=./C.gif ^
+  --noinclude-dlls=Qt6WebEngineCore.dll ^
+  --noinclude-dlls=Qt6WebEngineQuick.dll ^
+  --noinclude-dlls=Qt6WebSockets.dll ^
+  --noinclude-dlls=Qt6WebChannel.dll ^
+  --noinclude-dlls=Qt6WebView.dll ^
+  --noinclude-dlls=Qt6Quick.dll ^
+  --noinclude-dlls=Qt6Qml.dll ^
+  --noinclude-dlls=Qt6Multimedia.dll ^
+  --noinclude-dlls=Qt6Positioning.dll ^
+  --lto=yes ^
+  --output-filename="AWCASMARKER_v4.0_TEST" ^
+  main.py</pre>
+
+<p>产物为当前目录下的 <code>AWCASMARKER_v4.0_TEST.exe</code>（首次构建约 5–15 分钟，需要 Nuitka 4.x 与 UPX）。</p>
+
+<p style="margin-top:40px; color:var(--text-dim); font-size:0.85em;">
+AWACSMARK v4.0 · 内部项目，仅供 DCS World 模拟飞行使用
+</p>
+
+</body>
+</html>

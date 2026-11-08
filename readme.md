@@ -99,6 +99,8 @@ main.py (入口 ~20 行)
 
 ## 安装与使用
 
+> 完整图文说明（安装、脚本位置、原理、FAQ）见 [操作说明-v4.0.html](操作说明-v4.0.html)。
+
 ### 1. 安装消息钩子（必需）
 
 把 [tools/dcs_hook/awacs_hook.lua](tools/dcs_hook/awacs_hook.lua) 复制到：
