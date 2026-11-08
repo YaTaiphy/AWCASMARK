@@ -10,7 +10,7 @@
 
 from PySide6.QtWidgets import (
     QDialog, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
-    QFormLayout, QGridLayout, QLineEdit, QComboBox, QCheckBox,
+    QFormLayout, QLineEdit, QComboBox, QCheckBox,
     QPushButton, QLabel, QGroupBox, QMessageBox, QFrame,
 )
 from PySide6.QtCore import Qt
@@ -243,7 +243,7 @@ class SettingsDialog(QDialog):
         return page
 
     def _create_features_tab(self) -> QWidget:
-        """功能标签页：开关、小队代码、服务器模式。"""
+        """功能标签页：开关、小队代码。"""
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -252,9 +252,8 @@ class SettingsDialog(QDialog):
         # 开关
         sw_gb = QGroupBox("显示选项")
         sw_layout = QVBoxLayout(sw_gb)
-        self.showEnemyCheckBox = QCheckBox("显示敌机（需截图 + OCR）")
+        self.showEnemyCheckBox = QCheckBox("显示敌机")
         self.showFriendCheckBox = QCheckBox("显示队友（需小队代码匹配）")
-        self.showEnemyCheckBox.stateChanged.connect(self._on_show_enemy_changed)
         self.showFriendCheckBox.stateChanged.connect(self._on_show_friend_changed)
         sw_layout.addWidget(self.showEnemyCheckBox)
         sw_layout.addWidget(self.showFriendCheckBox)
@@ -268,17 +267,6 @@ class SettingsDialog(QDialog):
         self.teamCodeEdit.setToolTip("和其他人代码一样，会显示对应小队")
         team_layout.addRow("小队代码:", self.teamCodeEdit)
         layout.addWidget(team_gb)
-
-        # 服务器模式
-        mode_gb = QGroupBox("服务器模式")
-        mode_layout = QFormLayout(mode_gb)
-        self.serverMode = QComboBox()
-        self.serverMode.addItems(["传统预警机", "传统预警机(英文)", "SPS服务器", "BSC服务器"])
-        self.serverMode.setToolTip(
-            "传统预警机=左上角BRA通报 | SPS=右侧面板报点 | BSC=右侧面板"
-        )
-        mode_layout.addRow("模式:", self.serverMode)
-        layout.addWidget(mode_gb)
 
         layout.addStretch()
         return page
@@ -349,9 +337,8 @@ class SettingsDialog(QDialog):
         self.showEnemyCheckBox.setChecked(config.show_enemy)
         self.showFriendCheckBox.setChecked(config.show_friend)
 
-        # 功能 — 小队代码 & 模式
+        # 功能 — 小队代码
         self.teamCodeEdit.setText(config.team_code)
-        self.serverMode.setCurrentIndex(config.server_mode)
 
         # 服务器
         self.serverCheckBox.setChecked(config.is_default_server)
@@ -359,17 +346,12 @@ class SettingsDialog(QDialog):
         self.portEdit.setText(str(config.server_port))
 
         # 联动
-        self._on_show_enemy_changed()
         self._on_show_friend_changed()
         self._on_server_check_changed()
 
     # =========================================================================
     # 复选框联动
     # =========================================================================
-
-    def _on_show_enemy_changed(self):
-        # 敌机显示开关；截图链路已随 OCR 一起移除，这里无需联动输入框
-        pass
 
     def _on_show_friend_changed(self):
         enabled = self.showFriendCheckBox.isChecked()
@@ -427,12 +409,11 @@ class SettingsDialog(QDialog):
             config.bullseye["z"] = float(self.bullsEyeLat.text().strip() or "0")
             config.bullseye["x"] = float(self.bullsEyeLong.text().strip() or "0")
 
-            # 单位 & 模式
+            # 单位
             _unit_text = self.AWACASMARK_unit.currentText()
             config.awacs_metric_unit = {"KM": "km", "NM": "nm"}.get(_unit_text, "auto")
             config.remaining_time = int(self.RemainTime.text().strip() or "90")
             config.message_ttl = max(10, int(self.MessageTTL.text().strip() or "120"))
-            config.server_mode = self.serverMode.currentIndex()
 
             # 小队
             config.team_code = self.teamCodeEdit.text().strip()

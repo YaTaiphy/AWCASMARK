@@ -14,6 +14,7 @@ from constants import (
     CONDITION_HOT, ARROW_HEAD_FILL, TEXT_COLOR, AIRCRAFT_LABEL_COLOR,
 )
 from config import config
+from radar.fontcache import get_font
 
 
 def draw_enemy_plane(painter: QPainter, center_x: float, center_y: float,
@@ -52,9 +53,7 @@ def draw_enemy_plane(painter: QPainter, center_x: float, center_y: float,
     painter.drawEllipse(QPoint(int(ex), int(ey)), 3, 3)
 
     # ---- 文字标签 (跟随标记点颜色随时间淡出) ----
-    font = QFont()
-    font.setPointSize(8 if heading_offset == 0 else 6)
-    painter.setFont(font)
+    painter.setFont(get_font(8 if heading_offset == 0 else 6))
     painter.setPen(color)
     painter.drawText(int(ex + 6), int(ey - 3), f"{height_display:.1f}")
 
@@ -105,13 +104,14 @@ def draw_enemy_plane(painter: QPainter, center_x: float, center_y: float,
 def draw_friend_plane(painter: QPainter, center_x: float, center_y: float,
                       plane_data: dict, member: dict,
                       scale: float, radius_interval: float, max_radius: float,
-                      heading_offset: float = 0.0):
+                      heading_offset: float = 0.0, display_metric: str = "km"):
     """绘制一个友机标记。
 
     Args:
         plane_data: 本机数据 {x, z, heading}
         member: 友机数据 {x, y, z, heading, callSign, timestamp}
         heading_offset: 0=绝对方位, 非0=相对方位
+        display_metric: 界面显示单位（与敌机共用同一套换算）
     """
     from utils import calculate_bearing_and_distance
 
@@ -121,7 +121,7 @@ def draw_friend_plane(painter: QPainter, center_x: float, center_y: float,
         plane_data["x"], plane_data["z"], member["x"], member["z"]
     )
 
-    if config.show_metrics == "nm":
+    if display_metric == "nm":
         distance = distance_m / 1852
         height_display = member["y"] / 1000 * 3.28084
     else:
@@ -146,9 +146,7 @@ def draw_friend_plane(painter: QPainter, center_x: float, center_y: float,
     painter.drawEllipse(QPoint(int(ex), int(ey)), 3, 3)
 
     # ---- 高度 + 呼号 (浅色文字, 始终可读) ----
-    font = QFont()
-    font.setPointSize(8)
-    painter.setFont(font)
+    painter.setFont(get_font(8))
     painter.setPen(AIRCRAFT_LABEL_COLOR)
     painter.drawText(int(ex + 6), int(ey - 3), f"{height_display:.1f}")
     painter.drawText(int(ex + 6), int(ey + 6), member.get("callSign", ""))

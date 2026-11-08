@@ -84,31 +84,29 @@ def route(msg: DcsMessage, ctx: RouteContext) -> str:
         return MODE_IGNORED
 
     now = ctx.now or int(_time.time())
-    count = 0
 
-    if msg.kind == KIND_TRIGGER:
-        if looks_like_sps_panel(lines):
-            count = pipeline.apply_sps(lines, ctx.metric_unit, ctx.plane_x,
-                                       ctx.plane_z, ctx.message_dic,
-                                       source=ctx.source, now=now)
-            if count:
-                return MODE_SPS
-            return MODE_IGNORED
+    # 面板类：只可能出现在触发器文字里
+    if msg.kind == KIND_TRIGGER and looks_like_sps_panel(lines):
+        count = pipeline.apply_sps(lines, ctx.metric_unit, ctx.plane_x,
+                                   ctx.plane_z, ctx.message_dic,
+                                   source=ctx.source, now=now)
+        return MODE_SPS if count else MODE_IGNORED
 
-    elif msg.kind == KIND_RADIO:
-        if looks_like_awacs(lines):
-            if any(" for " in l.lower() for l in lines):
-                count = pipeline.apply_awacs_en(
-                    lines, ctx.call_sign, ctx.metric_unit, ctx.plane_x, ctx.plane_z,
-                    ctx.bullseye_x, ctx.bullseye_z, ctx.message_dic, ctx.bullseye_dic,
-                    source=ctx.source, now=now)
-                return MODE_AWACS_EN if count else MODE_IGNORED
-
-            count = pipeline.apply_awacs(
+    # BRA / 牛眼：正常走无线电；部分服务器用 outText 播报，所以触发器也认
+    if looks_like_awacs(lines):
+        english = any(" for " in l.lower() for l in lines)
+        if english:
+            count = pipeline.apply_awacs_en(
                 lines, ctx.call_sign, ctx.metric_unit, ctx.plane_x, ctx.plane_z,
                 ctx.bullseye_x, ctx.bullseye_z, ctx.message_dic, ctx.bullseye_dic,
                 source=ctx.source, now=now)
-            return MODE_AWACS if count else MODE_IGNORED
+            return MODE_AWACS_EN if count else MODE_IGNORED
+
+        count = pipeline.apply_awacs(
+            lines, ctx.call_sign, ctx.metric_unit, ctx.plane_x, ctx.plane_z,
+            ctx.bullseye_x, ctx.bullseye_z, ctx.message_dic, ctx.bullseye_dic,
+            source=ctx.source, now=now)
+        return MODE_AWACS if count else MODE_IGNORED
 
     # 其余（公告、ATC、无线电菜单、聊天）一律忽略
     return MODE_IGNORED

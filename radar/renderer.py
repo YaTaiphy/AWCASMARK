@@ -18,6 +18,7 @@ from constants import (
 from config import config
 from radar.grid import draw_radar_grid, draw_aircraft_arrow, draw_altitude_label
 from radar.aircraft import draw_enemy_plane, draw_friend_plane
+from radar.fontcache import get_font
 from utils import calculate_bearing_and_distance
 from dcs.parser import convert_altitude, convert_distance
 
@@ -100,16 +101,17 @@ class RadarRenderer:
         if config.show_friend:
             self._draw_friends(painter, center_x, center_y, plane_data,
                                team_members, scale, radius_interval,
-                               max_radius, heading_offset)
+                               max_radius, heading_offset, display_metric)
 
         # ---- 4. 敌机 (BRA + 牛眼) ----
-        self._draw_enemies(painter, center_x, center_y, plane_data,
-                           message_dic, scale, radius_interval,
-                           max_radius, heading_offset, display_metric)
+        if config.show_enemy:
+            self._draw_enemies(painter, center_x, center_y, plane_data,
+                               message_dic, scale, radius_interval,
+                               max_radius, heading_offset, display_metric)
 
-        self._draw_bullseyes(painter, center_x, center_y, plane_data,
-                             bullseye_dic, scale, radius_interval,
-                             max_radius, heading_offset, display_metric)
+            self._draw_bullseyes(painter, center_x, center_y, plane_data,
+                                 bullseye_dic, scale, radius_interval,
+                                 max_radius, heading_offset, display_metric)
 
     # =========================================================================
     # 飞行数据面板
@@ -125,7 +127,7 @@ class RadarRenderer:
             width, height: 控件尺寸
             display_metric: "km"=公制 / "nm"=英制
         """
-        from PySide6.QtGui import QFont, QColor
+        from PySide6.QtGui import QColor
         from PySide6.QtCore import Qt as QtCore
 
         painter.setRenderHint(QPainter.Antialiasing)
@@ -175,10 +177,7 @@ class RadarRenderer:
                                int(panel_w), int(panel_h), 8, 8)
 
         # ---- 标题 ----
-        title_font = QFont()
-        title_font.setPointSize(13)
-        title_font.setBold(True)
-        painter.setFont(title_font)
+        painter.setFont(get_font(13, bold=True))
         painter.setPen(QColor(180, 255, 180))
         painter.drawText(
             int(panel_x), int(panel_y + 8),
@@ -196,9 +195,7 @@ class RadarRenderer:
         )
 
         # ---- 数据行 ----
-        label_font = QFont()
-        label_font.setPointSize(10)
-        painter.setFont(label_font)
+        painter.setFont(get_font(10))
 
         for i, (label, value) in enumerate(rows):
             ry = panel_y + title_h + padding_v + i * row_h
@@ -213,10 +210,7 @@ class RadarRenderer:
             )
 
             # 值 (右侧, 亮白绿)
-            val_font = QFont()
-            val_font.setPointSize(11)
-            val_font.setBold(True)
-            painter.setFont(val_font)
+            painter.setFont(get_font(11, bold=True))
             painter.setPen(QColor(220, 255, 220))
             painter.drawText(
                 int(panel_x + panel_w * 0.44), int(ry),
@@ -224,18 +218,14 @@ class RadarRenderer:
                 QtCore.AlignmentFlag.AlignRight | QtCore.AlignmentFlag.AlignVCenter,
                 value,
             )
-            painter.setFont(label_font)  # 恢复为标签字体
+            painter.setFont(get_font(10))  # 恢复为标签字体
 
     # =========================================================================
     # 内部辅助
     # =========================================================================
 
     def _draw_height_label(self, painter, cx, cy, altitude_m, metric, font_size, mode):
-        from PySide6.QtGui import QFont
-        font = QFont()
-        font.setPointSize(font_size)
-        font.setBold(True)
-        painter.setFont(font)
+        painter.setFont(get_font(font_size, bold=True))
         painter.setPen(ALTITUDE_LABEL_COLOR)
 
         if metric == "nm":
@@ -251,14 +241,16 @@ class RadarRenderer:
             painter.drawText(int(cx + 10), int(cy - 10), f"{h:.1f}")
 
     def _draw_friends(self, painter, cx, cy, plane_data, team_members,
-                      scale, radius_interval, max_radius, heading_offset):
+                      scale, radius_interval, max_radius, heading_offset,
+                      display_metric="km"):
         if not team_members:
             return
         for member in team_members:
             if int(time.time()) - member.get("timestamp", 0) > config.show_friend_time:
                 continue
             draw_friend_plane(painter, cx, cy, plane_data, member,
-                              scale, radius_interval, max_radius, heading_offset)
+                              scale, radius_interval, max_radius,
+                              heading_offset, display_metric)
 
     def _draw_enemies(self, painter, cx, cy, plane_data, message_dic,
                       scale, radius_interval, max_radius,

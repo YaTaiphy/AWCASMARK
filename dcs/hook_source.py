@@ -46,6 +46,7 @@ class HookLogReader:
         self._primed = False
         self._last_beat = 0.0
         self._seen = {}          # (kind, text) -> ts
+        self._head = b""         # 文件前 64 字节，用于识别重写
 
     # ---- 生命周期 --------------------------------------------------------
 
@@ -54,17 +55,27 @@ class HookLogReader:
         self._offset = 0
         self._buffer = b""
         self._primed = False
+        self._head = b""
         self._last_beat = 0.0
         self._seen.clear()
 
     def prime(self):
-        """首次读取前的定位：回填最近 backfill_bytes 字节。"""
+        """首次读取前的定位：回填最近 backfill_bytes 字节，并记住文件头。"""
         try:
             size = os.path.getsize(self.path)
         except OSError:
             size = 0
         self._offset = max(0, size - self.backfill_bytes) if self.backfill_bytes else size
         self._primed = True
+        self._head = self._read_head()
+
+    def _read_head(self) -> bytes:
+        """文件前 64 字节，用来识别"被重写"（换图时钩子会截断重写）。"""
+        try:
+            with open(self.path, "rb") as fp:
+                return fp.read(64)
+        except OSError:
+            return b""
 
     # ---- 读取 ------------------------------------------------------------
 
@@ -77,17 +88,28 @@ class HookLogReader:
         if not self._primed:
             self.prime()
 
-        if size < self._offset:          # 被截断（新任务 / 超 1 MB 重写）
-            logger.info("钩子日志被截断，从头读取: %s", self.path)
-            self._offset = 0
-            self._buffer = b""
-            self._seen.clear()
-
-        if size == self._offset:
-            return []
-
         try:
             with open(self.path, "rb") as fp:
+                head = fp.read(64)
+
+                # 文件头变了 = 被截断重写过（比"文件变小"更可靠：
+                # 新任务在 200 ms 内可能就长回旧 offset 之上）
+                if self._head and head[:len(self._head)] != self._head:
+                    logger.info("钩子日志被重写，从头读取: %s", self.path)
+                    self._offset = 0
+                    self._buffer = b""
+                    self._seen.clear()
+                self._head = head
+
+                if size < self._offset:          # 兜底：变小但没变头
+                    logger.info("钩子日志被截断，从头读取: %s", self.path)
+                    self._offset = 0
+                    self._buffer = b""
+                    self._seen.clear()
+
+                if size == self._offset:
+                    return []
+
                 fp.seek(self._offset)
                 chunk = fp.read(min(size - self._offset, MAX_CHUNK))
         except OSError as exc:
@@ -163,6 +185,7 @@ class HookSource(QObject):
 
     message_received = Signal(object)     # DcsMessage
     alive_changed = Signal(bool)
+    stalled = Signal()                    # 启动后一直没收到心跳（只发一次）
 
     def __init__(self, path: Optional[str] = None, ttl: int = 120,
                  heartbeat_timeout: int = 15, parent=None):
@@ -172,6 +195,9 @@ class HookSource(QObject):
         self._heartbeat_timeout = int(heartbeat_timeout)
         self._reader = HookLogReader(self._path, self._ttl)
         self._alive = False
+        self._ever_alive = False
+        self._stalled_notified = False
+        self._started_at = 0.0
 
         self._timer = QTimer(self)
         self._timer.setInterval(POLL_INTERVAL_MS)
@@ -179,9 +205,18 @@ class HookSource(QObject):
 
     # ---- 生命周期 --------------------------------------------------------
 
-    def start(self):
-        self._reader = HookLogReader(self._path, self._ttl)
+    def start(self, resume: bool = False):
+        """启动轮询。
+
+        resume=True 时保留读取位置（停止→再开始，不重复回填旧消息）；
+        resume=False 时新建 reader（应用首次启动 / 需要回填最近 120 s）。
+        """
+        if not resume:
+            self._reader = HookLogReader(self._path, self._ttl)
         self._alive = False
+        self._ever_alive = False
+        self._stalled_notified = False
+        self._started_at = time.time()
         self._timer.start()
         logger.info("钩子消息源启动: %s", self._path)
 
@@ -206,10 +241,19 @@ class HookSource(QObject):
             self.message_received.emit(msg)
 
         alive = self._reader.is_alive(self._heartbeat_timeout)
+        if alive:
+            self._ever_alive = True
         if alive != self._alive:
             self._alive = alive
             self.alive_changed.emit(alive)
             logger.info("钩子心跳: %s", "在线" if alive else "失联")
+
+        # 启动后一直没收到心跳：提示一次（钩子没装 / DCS 没重启 / 路径不可写）
+        if (not self._ever_alive and not self._stalled_notified
+                and time.time() - self._started_at > self._heartbeat_timeout):
+            self._stalled_notified = True
+            logger.warning("超过 %d 秒未收到钩子心跳：%s", self._heartbeat_timeout, self._path)
+            self.stalled.emit()
 
     # ---- 查询 ------------------------------------------------------------
 

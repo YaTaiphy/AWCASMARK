@@ -18,36 +18,19 @@ logger = get_logger(__name__)
 
 
 # =============================================================================
-# OCR 纠错
+# 数值提取
 # =============================================================================
 
-def _correct_numbers(text: str) -> str:
-    """对常见数字 OCR 识别错误进行纠正。"""
-    mapping = str.maketrans({
-        "o": "0", "O": "0", "c": "0",
-        "l": "1", "I": "1", "i": "1", "L": "1", "/": "1", "\\": "1",
-        "b": "6", "B": "8", "G": "6",
-        "g": "9", "q": "9", "Q": "9",
-        "s": "5", "S": "5",
-        "z": "2", "Z": "2",
-        "T": "7", "t": "7",
-    })
-    return text.translate(mapping)
-
-
-def _correct_letters(text: str) -> str:
-    """对常见字母 OCR 识别错误进行纠正。"""
-    mapping = str.maketrans({
-        "0": "O", "8": "B", "6": "G", "9": "Q", "5": "S",
-        "1": "I", "2": "Z", "4": "A", "7": "T", "3": "E",
-    })
-    return text.translate(mapping)
-
-
 def _first_number(text: str) -> str:
-    """提取字符串中第一段连续数字。"""
+    """提取字符串中第一段连续数字（没有则返回空串）。"""
     match = re.search(r"\d+", text)
     return match.group() if match else ""
+
+
+def _first_int(text: str, default: int = 0) -> int:
+    """提取第一个整数；取不到时返回 default。"""
+    value = _first_number(text)
+    return int(value) if value else default
 
 
 # =============================================================================
@@ -99,18 +82,13 @@ def _parse_condition(text: str) -> int:
 
 
 def _parse_condition_en(text: str) -> int:
-    """Parse English aspect: hot→1, flanking/flank→0, cold→-1, unknown→-2。
-
-    OCR 容错: hot 可能识别为 jot/h0t/j0t 等 (h↔j, o↔0, t↔7)。
-    """
+    """解析英文接敌状态: hot→1, flanking/flank→0, cold→-1, 未知→-2。"""
     lower = text.lower()
-    # "hot" 模糊匹配 — 常见 OCR 错误: jot, h0t, j0t, ho7
-    if re.search(r'\b[hj][o0][t7]\b', lower):
+    if re.search(r"\bhot\b", lower):
         return CONDITION_HOT
-    # "cold" 模糊匹配 — OCR 错误: c0ld, co1d, cold
-    if re.search(r'\b[c][o0][l1][d]\b', lower):
+    if re.search(r"\bcold\b", lower):
         return CONDITION_COLD
-    if "flanking" in lower or "flank" in lower or "beam" in lower:
+    if re.search(r"\b(flanking|flank|beam)\b", lower):
         return CONDITION_FLANK
     return CONDITION_UNKNOWN
 
@@ -131,6 +109,8 @@ def _heading_from_condition(bearing: int, condition: int) -> int:
 # =============================================================================
 
 _CALLSIGN_STRIP = re.compile(r"[^0-9a-z]")
+_RE_BRG_FOR = re.compile(r"(\d{1,3})\s*for\s*(\d{1,3}(?:\.\d+)?)", re.IGNORECASE)
+_RE_ALTITUDE = re.compile(r"altitude\s+([\d,]+)", re.IGNORECASE)
 
 
 def _norm_callsign(text: str) -> str:
@@ -205,9 +185,9 @@ def parse_awacs_bra(ocr_lines: list[str], call_sign: dict, metric_unit: str,
         condition = _parse_condition(parts[-1])
 
         # 提取数值 (bearing, distance, altitude)
-        enemy_altitude = int("".join(re.findall(r"\d+", "0" + _correct_numbers(parts[-2]))))
-        enemy_distance_raw = int("".join(re.findall(r"\d+", "0" + _correct_numbers(parts[-3]))))
-        enemy_bearing = int("".join(re.findall(r"\d+", "0" + _correct_numbers(parts[-4]))))
+        enemy_altitude = _first_int(parts[-2])
+        enemy_distance_raw = _first_int(parts[-3])
+        enemy_bearing = _first_int(parts[-4])
 
         if enemy_bearing < 0 or enemy_bearing >= 360:
             continue
@@ -257,9 +237,9 @@ def parse_bullseye(ocr_lines: list[str], metric_unit: str,
         if not any(word in line for word in need_words):
             continue
 
-        altitude = int("".join(re.findall(r"\d+", "0" + _correct_numbers(parts[-1]))))
-        distance_raw = int("".join(re.findall(r"\d+", "0" + _correct_numbers(parts[-2]))))
-        bearing = int("".join(re.findall(r"\d+", "0" + _correct_numbers(parts[-3]))))
+        altitude = _first_int(parts[-1])
+        distance_raw = _first_int(parts[-2])
+        bearing = _first_int(parts[-3])
 
         if bearing < 0 or bearing >= 360:
             continue
@@ -495,19 +475,10 @@ def parse_awacs_bra_en(ocr_lines: list[str], call_sign: dict, metric_unit: str,
     格式: "Callsign, AWACS, threat_type, 方位 for 距离, at altitude 高度, aspect"
     示例: "Dodge 4, Overlord1-1, pop-up group, 060 for 130, at altitude 500, hot"
 
-    容错 OCR 错误:
-        - 关键词 "for":  可能识别为 f0r, tor, fo7 等
-        - 关键词 "altitude": 可能识别为 albitude, a1titude 等
-        - 数字: 应用 _correct_numbers 纠正 (l→1, O→0, B→8 等)
-
     Returns:
         新识别的敌机消息列表
     """
     from utils import offset_coordinate
-
-    # 预编译正则
-    _RE_FOR = re.compile(r'\b[f7][o0][r12]\b', re.IGNORECASE)    # "for" 容错
-    _RE_ALTITUDE = re.compile(r'a[a-z0-9]*tude\s+(\d+)', re.IGNORECASE)  # altitude 容错
 
     results = []
     for line in ocr_lines:
@@ -515,45 +486,24 @@ def parse_awacs_bra_en(ocr_lines: list[str], call_sign: dict, metric_unit: str,
             continue
 
         lower = line.lower().strip()
-
-        # ---- 特征词检查（原始文本 + 模糊正则） ----
-        if not _RE_FOR.search(lower):
-            continue
-        if not _RE_ALTITUDE.search(lower):
+        if " for " not in lower or "altitude" not in lower:
             continue
 
-        # ---- 提取方位和距离: "NNN for NNN" ----
-        # 先匹配结构，再对数字部分做 OCR 纠错
-        bd_raw = re.search(r'(\S+)\s+for\s+(\S+)', lower)
-        if not bd_raw:
-            continue
-        bearing_str = _correct_numbers(bd_raw.group(1))
-        dist_str = _correct_numbers(bd_raw.group(2))
-        # 提取纯数字
-        bearing_match = re.search(r'\d+', bearing_str)
-        dist_match = re.search(r'\d+', dist_str)
-        if not bearing_match or not dist_match:
-            continue
-        enemy_bearing = int(bearing_match.group())
-        enemy_distance_raw = int(dist_match.group())
-        if enemy_bearing < 0 or enemy_bearing >= 360:
+        bd = _RE_BRG_FOR.search(lower)
+        alt = _RE_ALTITUDE.search(lower)
+        if not bd or not alt:
             continue
 
-        # ---- 提取高度 ----
-        alt_match = _RE_ALTITUDE.search(lower)
-        if not alt_match:
-            continue
-        alt_str = _correct_numbers(alt_match.group(1))
-        alt_digits = re.search(r'\d+', alt_str)
-        if not alt_digits:
-            continue
-        enemy_altitude = int(alt_digits.group())
-
-        # ---- 呼号匹配 (原始文本) ----
-        if not _match_callsign_en(lower, call_sign):
+        enemy_bearing = int(bd.group(1))
+        enemy_distance_raw = float(bd.group(2))
+        if not 0 <= enemy_bearing < 360:
             continue
 
-        # ---- 接敌状态 (原始文本) ----
+        enemy_altitude = _first_int(alt.group(1))
+
+        if not _match_callsign_en(line, call_sign):
+            continue
+
         condition = _parse_condition_en(lower)
         enemy_distance = convert_distance(enemy_distance_raw, metric_unit)
         enemy_heading = _heading_from_condition(enemy_bearing, condition)
@@ -582,17 +532,10 @@ def parse_bullseye_en(ocr_lines: list[str], metric_unit: str,
         "First group at bullseye 060 for 40, at altitude 4500"
         "Additional group at bulls 104 for 16, at altitude 5000"
 
-    关键点：
-        - 关键词: "bull" (bulls/bullseye / OCR: bu11s, bu11seye)
-        - 方位/距离: "060 for 40" → bearing=060, distance=40
-        - 高度:    "at altitude 4500" → 4500（容错: albitude 等）
-
     Returns:
         新识别的牛眼敌机消息列表
     """
     from utils import offset_coordinate
-
-    _RE_ALTITUDE = re.compile(r'a[a-z0-9]*tude\s+(\d+)', re.IGNORECASE)  # altitude 容错
 
     results = []
     for line in ocr_lines:
@@ -600,22 +543,20 @@ def parse_bullseye_en(ocr_lines: list[str], metric_unit: str,
             continue
 
         lower = line.lower().strip()
-        corrected = _correct_numbers(lower)
-
-        # 关键特征词: "bull" (纠错后容忍 bu11)
-        if "bull" not in corrected and "bull" not in lower:
-            continue
-        if "for" not in corrected:
+        if "bull" not in lower:
             continue
 
-        # ---- 提取方位和距离 ----
-        bd_match = re.search(r'(\d+)\s*for\s*(\d+)', corrected)
-        if not bd_match:
+        bd = _RE_BRG_FOR.search(lower)
+        if not bd:
             continue
-        bearing = int(bd_match.group(1))
-        distance_raw = int(bd_match.group(2))
-        if bearing < 0 or bearing >= 360:
+
+        bearing = int(bd.group(1))
+        distance_raw = float(bd.group(2))
+        if not 0 <= bearing < 360:
             continue
+
+        alt = _RE_ALTITUDE.search(lower)
+        altitude = _first_int(alt.group(1)) if alt else 0
 
         # ---- 提取高度 (可能没有) ----
         alt_match = _RE_ALTITUDE.search(corrected)
@@ -639,31 +580,10 @@ def parse_bullseye_en(ocr_lines: list[str], metric_unit: str,
 # 英文呼号匹配
 # =============================================================================
 
-def _match_callsign_en(ocr_text: str, call_sign: dict) -> bool:
-    """检查 OCR 文本是否包含配置的英文呼号。
+def _match_callsign_en(line: str, call_sign: dict) -> bool:
+    """英文通报的接收方在第 0 段（第一个逗号之前），复用统一的归一化比较。
 
-    英文格式: "Dodge 4" 或纯数字 "9214"
-    匹配策略:
-        - 如果 call_sign["text"] 为空 → 仅匹配数字
-        - 否则匹配首字母 + 数字
+    例："Dodge 4, Overlord1-1, pop-up group, ..." → 接收方 "Dodge 4"。
     """
-    lower = ocr_text.lower()
-    num = call_sign["num"]
-
-    # 数字必须出现
-    if num not in lower:
-        return False
-
-    if call_sign["text"] == "":
-        # 纯数字呼号
-        return True
-
-    # 字母呼号：首字母必须匹配（OCR 可能将整词拆开）
-    first_letter = call_sign["text"][0].lower()
-    # 在数字前找首字母
-    num_pos = lower.find(num)
-    if num_pos > 0:
-        prefix = lower[:num_pos]
-        if first_letter in prefix:
-            return True
-    return False
+    receiver = line.split(",")[0]
+    return _match_callsign(receiver, call_sign)

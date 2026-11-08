@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 from window import Ui_MA
 from config import config
 from constants import (
-    TIMER_TEAM_MS,
+    TIMER_TEAM_MS, REFRESH_INTERVAL_MS,
     DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT,
     DISPLAY_MODE_NGAS, DISPLAY_MODE_SA, DISPLAY_MODE_CENTER_SA,
     OPACITY_MIN, OPACITY_MAX,
@@ -299,6 +299,7 @@ class MainWindow(QMainWindow, Ui_MA):
         self._hook_source = None
         self._hook_alive = False
         self._unit_warned = False
+        self._bullseye_warned = False
 
         # ---- 配置迁移 ----
         self._migrate_config()
@@ -461,12 +462,12 @@ class MainWindow(QMainWindow, Ui_MA):
     def _schedule_refresh(self):
         """合并短时间内多次刷新请求（resize / UDP 高频更新）。
 
-        用 16ms 单次定时器将频繁的 refresh 合并为 ~60fps 的实际重绘，
-        避免 resize 拖动或高频 UDP 报文时每个事件都触发完整雷达渲染。
+        UDP 数据只有 10 Hz，重绘按 30 fps（33 ms）合并即可；
+        原来用 16 ms（60 fps）属于无谓开销。
         """
         if not self._refresh_pending:
             self._refresh_pending = True
-            QTimer.singleShot(16, self._do_pending_refresh)
+            QTimer.singleShot(REFRESH_INTERVAL_MS, self._do_pending_refresh)
 
     def _do_pending_refresh(self):
         """执行被合并后的实际刷新。"""
@@ -815,6 +816,9 @@ class MainWindow(QMainWindow, Ui_MA):
                                 "请确保所有参数已准备好后再开始任务。")
             return
 
+        # 先置位：钩子/线程一旦启动，早到的消息也不会被当成"停止后残留"丢弃
+        self._mission_running = True
+
         # ---- UDP 监听线程 ----
         if not (self._udp_thread and self._udp_thread.isRunning()):
             self._udp_thread = QThread()
@@ -840,7 +844,6 @@ class MainWindow(QMainWindow, Ui_MA):
             self._team_worker.reset()
 
         # ---- 定时器 ----
-        self._mission_running = True      # 先置位，避免首个结果被当成"停止后残留"丢弃
         if config.show_friend:
             self._timer_team.start(TIMER_TEAM_MS)
         self._timer_house.start(1000)
@@ -977,7 +980,8 @@ class MainWindow(QMainWindow, Ui_MA):
 
     def _start_hook_source(self):
         """启动钩子日志读取（QTimer，不占用线程）。"""
-        if self._hook_source is None:
+        first_start = self._hook_source is None
+        if first_start:
             self._hook_source = HookSource(
                 path=config.hook_log_path or None,
                 ttl=config.message_ttl,
@@ -986,16 +990,28 @@ class MainWindow(QMainWindow, Ui_MA):
             )
             self._hook_source.message_received.connect(self._on_dcs_message)
             self._hook_source.alive_changed.connect(self._on_hook_alive_changed)
+            self._hook_source.stalled.connect(self._on_hook_stalled)
 
         self._hook_alive = False
-        self._hook_source.start()
+        # 首次启动回填最近 120 s；停止后再开始保留读取位置，避免重复回填
+        self._hook_source.start(resume=not first_start)
 
     def _on_hook_alive_changed(self, alive: bool):
         self._hook_alive = alive
         if alive:
             logger.info("DCS 钩子已连接（%s）", self._hook_source.path)
+            self._set_hint("")
         else:
             logger.warning("DCS 钩子失联：检查 Scripts\\Hooks\\awacs_hook.lua 是否已安装、DCS 是否重启过")
+            self._set_hint("（DCS 钩子失联）")
+
+    def _on_hook_stalled(self):
+        """启动后一直没收到心跳。"""
+        self._set_hint("（未检测到 DCS 钩子）")
+
+    def _set_hint(self, text: str):
+        """在窗口标题上提示钩子状态（比弹窗干扰小）。"""
+        self.setWindowTitle("AWACSMARK" + text)
 
     def _on_dcs_message(self, msg):
         """收到一条游戏内文字消息 → 路由 → 写入 message_dic。"""
@@ -1031,9 +1047,31 @@ class MainWindow(QMainWindow, Ui_MA):
             logger.warning("传统预警机单位未定：已按 %s 处理，请在设置中选择 KM 或 NM",
                            "km" if mode == "awacs" else "nm")
 
+        # 收到牛眼通报但靶眼没配置 → 所有点会堆在原点，提示一次
+        if (mode in ("awacs", "awacs_en") and self.bullseye_dic
+                and not self._bullseye_warned
+                and not any(config.bullseye.get(k) for k in ("x", "z"))):
+            self._bullseye_warned = True
+            logger.warning("收到牛眼通报，但靶眼坐标未配置（0,0），标记位置会全部错误")
+
         logger.info("钩子[%s] → %s（敌机 %d 条 / 牛眼 %d 条）",
                     msg.kind, mode, len(self.message_dic), len(self.bullseye_dic))
         self._refresh_radar()
+
+    # =========================================================================
+    # 退出
+    # =========================================================================
+
+    def closeEvent(self, event):
+        """关窗口前先停掉线程，否则 QThread 在运行中被析构会崩。"""
+        if self._mission_running:
+            try:
+                self._end_mission()
+            except Exception as exc:          # 退出路径不应抛异常
+                logger.warning("退出时停止任务失败: %s", exc)
+        elif self._hook_source:
+            self._hook_source.stop()
+        super().closeEvent(event)
 
     def _tick_house(self):
         """每秒清理过期标记（钩子模式下 OCR 不跑，必须独立清理）。"""

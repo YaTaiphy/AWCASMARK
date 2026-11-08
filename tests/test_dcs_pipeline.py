@@ -190,6 +190,14 @@ def test_callsign_matching():
         assert got == expected, f"{call_sign} vs {receiver!r}: {got} != {expected}"
 
 
+def test_trigger_bra_is_routed():
+    """有些服务器用 outText（trigger）发 BRA，不能只认 radio。"""
+    ctx = make_ctx()
+    mode = route(DcsMessage(ts=0, kind="trigger", text=BRA_SAMPLE), ctx)
+    assert mode == MODE_AWACS, mode
+    assert len(ctx.message_dic) == 1
+
+
 def test_player_echo_ignored():
     ctx = make_ctx()
     mode = route(DcsMessage(ts=0, kind="radio",
@@ -275,6 +283,26 @@ def test_reader_incremental_and_truncate():
         fp.write("结束\n")
     assert [m.text for m in reader.poll()] == ["半行结束"]
 
+    os.remove(path)
+
+
+def test_reader_detects_rewrite_growing_file():
+    """换图时钩子会截断重写；新文件可能很快又长过旧 offset，必须靠文件头识别。"""
+    fd, path = tempfile.mkstemp(suffix=".log")
+    os.close(fd)
+    now = [1_700_000_000.0]
+    reader = HookLogReader(path, ttl=120, clock=lambda: now[0])
+
+    with open(path, "w", encoding="utf-8") as fp:
+        fp.write("M\t1700000000\ttrigger\t旧任务\n")
+    assert [m.text for m in reader.poll()] == ["旧任务"]
+
+    # 重写成更长的内容（长度超过旧 offset，靠 size < offset 判断会漏）
+    with open(path, "w", encoding="utf-8") as fp:
+        fp.write("M\t1700000001\ttrigger\t新任务一\n")
+        fp.write("M\t1700000002\ttrigger\t新任务二\n")
+
+    assert [m.text for m in reader.poll()] == ["新任务一", "新任务二"]
     os.remove(path)
 
 
